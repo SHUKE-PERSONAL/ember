@@ -1,6 +1,7 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import session from 'express-session';
 import { authRouter } from './auth/routes.js';
+import { postsRouter } from './posts/routes.js';
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3001);
@@ -31,6 +32,7 @@ app.get('/api/health', (_req, res) => {
 });
 
 app.use('/api', authRouter);
+app.use('/api', postsRouter);
 
 // Terminal error handler — turns unexpected errors into a 500 instead of a
 // hung request. Must be registered after the routes.
