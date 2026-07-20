@@ -1,28 +1,11 @@
-import { Router, type Request, type Response, type NextFunction, type RequestHandler } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db.js';
 import { hashPassword, verifyPassword } from './password.js';
+import { asyncHandler } from '../util/asyncHandler.js';
+import { publicUser } from './publicUser.js';
 
 export const authRouter = Router();
-
-// Express 4 does not forward errors thrown in async handlers to the error
-// middleware — an unhandled rejection would hang the request. Wrap async
-// handlers so their rejections reach next().
-function asyncHandler(fn: (req: Request, res: Response) => Promise<unknown>): RequestHandler {
-  return (req, res, next: NextFunction) => {
-    fn(req, res).catch(next);
-  };
-}
-
-// Shape returned to clients — never includes passwordHash.
-const publicUser = {
-  id: true,
-  handle: true,
-  displayName: true,
-  email: true,
-  bio: true,
-  createdAt: true,
-} as const;
 
 function isNonEmptyString(v: unknown): v is string {
   return typeof v === 'string' && v.trim().length > 0;

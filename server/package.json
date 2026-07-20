@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "typecheck": "tsc --noEmit",
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts",
+    "test": "vitest run"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -23,6 +24,7 @@
     "@types/express-session": "^1.18.0",
     "@types/node": "^20.14.0",
     "prisma": "^5.18.0",
-    "tsx": "^4.16.5"
+    "tsx": "^4.16.5",
+    "vitest": "^4.1.10"
   }
 }
