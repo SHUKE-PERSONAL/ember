@@ -1,0 +1,13 @@
+// Ember database schema.
+// Stub only — real models land in #2. The SQLite datasource and client
+// generator are wired now so generated Prisma types are available as soon as
+// models are added.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
