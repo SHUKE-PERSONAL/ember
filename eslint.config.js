@@ -15,5 +15,13 @@ export default tseslint.config(
       ecmaVersion: 2022,
       sourceType: 'module',
     },
+    rules: {
+      // Allow deliberately-unused bindings prefixed with _ (e.g. the required
+      // 4th arg of an Express error handler, or destructure-to-omit patterns).
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', ignoreRestSiblings: true },
+      ],
+    },
   },
 );

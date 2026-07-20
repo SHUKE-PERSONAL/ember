@@ -1,7 +1,10 @@
 // Ember database schema.
-// Stub only — real models land in #2. The SQLite datasource and client
-// generator are wired now so generated Prisma types are available as soon as
-// models are added.
+//
+// Portability: only cross-database-portable Prisma features are used (String,
+// DateTime, Boolean, Int, @id, @unique, @@unique, @default(now()), @relation).
+// No @db.* native types and no raw SQL, so the only difference between the
+// SQLite (v1) runtime and a Postgres deployment is the datasource provider +
+// connection string below. See #2.
 
 generator client {
   provider = "prisma-client-js"
@@ -10,4 +13,58 @@ generator client {
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  handle       String   @unique
+  displayName  String
+  email        String   @unique
+  passwordHash String
+  bio          String?
+  createdAt    DateTime @default(now())
+
+  posts     Post[]
+  following Follow[] @relation("follower")
+  followers Follow[] @relation("following")
+  likes     Like[]
+}
+
+model Post {
+  id         String   @id @default(cuid())
+  author     User     @relation(fields: [authorId], references: [id])
+  authorId   String
+  // Stored in full. The 140-grapheme soft limit and the 1024-grapheme
+  // anti-abuse ceiling are enforced on the post-create path (#3), not as a
+  // column constraint — keeping this column portable.
+  text       String
+  replyTo    Post?    @relation("replies", fields: [replyToId], references: [id])
+  replyToId  String?
+  replies    Post[]   @relation("replies")
+  repostOf   Post?    @relation("reposts", fields: [repostOfId], references: [id])
+  repostOfId String?
+  reposts    Post[]   @relation("reposts")
+  createdAt  DateTime @default(now())
+
+  likes Like[]
+}
+
+model Follow {
+  follower    User     @relation("follower", fields: [followerId], references: [id])
+  followerId  String
+  following   User     @relation("following", fields: [followingId], references: [id])
+  followingId String
+  createdAt   DateTime @default(now())
+
+  @@id([followerId, followingId])
+}
+
+model Like {
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  post      Post     @relation(fields: [postId], references: [id])
+  postId    String
+  createdAt DateTime @default(now())
+
+  @@id([userId, postId])
 }
