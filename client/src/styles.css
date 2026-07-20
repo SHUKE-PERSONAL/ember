@@ -1,0 +1,165 @@
+:root {
+  color-scheme: light dark;
+  --border: color-mix(in srgb, currentColor 15%, transparent);
+  --muted: color-mix(in srgb, currentColor 55%, transparent);
+  --accent: #e2513b;
+}
+
+body {
+  margin: 0;
+  font: 15px/1.5 system-ui, sans-serif;
+}
+
+.app,
+.auth {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.topbar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+
+.topbar h1 {
+  color: var(--accent);
+  margin: 0.5rem 0;
+}
+
+.who {
+  display: flex;
+  gap: 0.75rem;
+  align-items: baseline;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.empty {
+  padding: 2rem 0;
+  text-align: center;
+}
+
+.error {
+  color: var(--accent);
+  margin: 0.25rem 0;
+}
+
+/* Compose */
+.compose {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.compose textarea,
+.auth input {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: inherit;
+  resize: vertical;
+}
+
+.compose-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.counter {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.counter.soft {
+  color: #c98a00;
+}
+
+.counter.over {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button.link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  padding: 0;
+  border-radius: 0;
+}
+
+button.more {
+  margin-left: 0.4rem;
+  font-size: 0.9em;
+}
+
+/* Timeline */
+.post {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.post header {
+  display: flex;
+  gap: 0.4rem;
+  align-items: baseline;
+  margin-bottom: 0.25rem;
+}
+
+.post .name {
+  font-weight: 600;
+}
+
+.post .handle,
+.post time,
+.post .dot {
+  color: var(--muted);
+}
+
+.post .body {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.load-more {
+  display: block;
+  margin: 1rem auto;
+  background: none;
+  color: var(--accent);
+}
+
+/* Auth */
+.auth {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 3rem;
+}
