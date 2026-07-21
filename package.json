@@ -10,7 +10,8 @@
   "scripts": {
     "dev": "concurrently -n server,client -c blue,magenta \"npm run dev -w server\" \"npm run dev -w client\"",
     "lint": "eslint .",
-    "typecheck": "npm run typecheck -w server && npm run typecheck -w client"
+    "typecheck": "npm run typecheck -w server && npm run typecheck -w client",
+    "test": "npm test --workspaces --if-present"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",
