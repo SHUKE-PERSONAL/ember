@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      # A clean checkout has no .env (gitignored); Prisma reads DATABASE_URL from it.
+      - run: cp server/.env.example server/.env
+      # Generate the Prisma client before typecheck/test, which import @prisma/client.
+      - run: npm exec -w server -- prisma generate
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test

@@ -40,7 +40,11 @@ origin.
 ```bash
 npm run typecheck   # tsc --noEmit across both workspaces
 npm run lint        # eslint (flat config, typescript-eslint)
+npm test            # vitest across workspaces (--if-present; server only)
 ```
+
+CI (`.github/workflows/ci.yml`) runs these on every pull request and on push to
+`main`, after generating the Prisma client.
 
 ## Database
 
