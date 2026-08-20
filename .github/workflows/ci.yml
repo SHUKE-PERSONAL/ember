@@ -8,6 +8,23 @@ on:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://ember:ember@localhost:5432/ember?schema=public
+      SESSION_SECRET: ci-session-secret
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: ember
+          POSTGRES_USER: ember
+          POSTGRES_PASSWORD: ember
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ember -d ember"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -19,6 +36,9 @@ jobs:
       - run: cp server/.env.example server/.env
       # Generate the Prisma client before typecheck/test, which import @prisma/client.
       - run: npm exec -w server -- prisma generate
+      - run: npm exec -w server -- prisma migrate deploy
+      - run: npm run seed -w server
+      - run: npm run seed -w server
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test

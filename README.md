@@ -1,7 +1,7 @@
 # Ember
 
 Monorepo skeleton: Vite + React (client) and Node + Express (server), TypeScript
-throughout, SQLite via Prisma.
+throughout, PostgreSQL via Prisma.
 
 ## Layout
 
@@ -14,12 +14,15 @@ server/   Express + TS backend (run via tsx in dev)
 
 - Node.js 20+
 - npm 9+ (workspaces)
+- Docker with Compose
 
 ## Getting started
 
 ```bash
 npm install
+docker compose up -d --wait postgres
 cp server/.env.example server/.env   # sets DATABASE_URL + PORT
+npm exec -w server -- prisma migrate deploy
 npm run dev
 ```
 
@@ -40,14 +43,19 @@ origin.
 ```bash
 npm run typecheck   # tsc --noEmit across both workspaces
 npm run lint        # eslint (flat config, typescript-eslint)
-npm test            # vitest across workspaces (--if-present; server only)
+npm test            # vitest against isolated PostgreSQL schemas
 ```
 
 CI (`.github/workflows/ci.yml`) runs these on every pull request and on push to
-`main`, after generating the Prisma client.
+`main`, using a PostgreSQL service after generating the Prisma client, applying
+migrations, and running the seed twice.
 
 ## Database
 
-Prisma is wired with a SQLite datasource and an empty schema
-(`server/prisma/schema.prisma`). Real models arrive in a later change; generate
-the client with `npx prisma generate` from `server/` once models exist.
+The local PostgreSQL service is defined in `docker-compose.yml`. Start it with
+`docker compose up -d --wait postgres`, then apply migrations with
+`npm exec -w server -- prisma migrate deploy`. The idempotent development seed
+is available with `npm run seed -w server`.
+
+The test harness creates and migrates a disposable PostgreSQL schema for each
+test file, so `npm test` does not modify the shared development data.

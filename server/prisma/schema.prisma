@@ -2,16 +2,15 @@
 //
 // Portability: only cross-database-portable Prisma features are used (String,
 // DateTime, Boolean, Int, @id, @unique, @@unique, @default(now()), @relation).
-// No @db.* native types and no raw SQL, so the only difference between the
-// SQLite (v1) runtime and a Postgres deployment is the datasource provider +
-// connection string below. See #2.
+// No @db.* native types or raw SQL keep this schema portable across PostgreSQL
+// environments.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
