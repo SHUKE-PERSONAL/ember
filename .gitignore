@@ -8,11 +8,6 @@ build/
 .env.*
 !.env.example
 
-# SQLite
-*.db
-*.db-journal
-*.sqlite
-
 # Editor / OS
 .DS_Store
 .vscode/

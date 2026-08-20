@@ -40,18 +40,33 @@ async function main() {
 
   // A few posts, including a reply.
   const posts = [
-    { author: ada, text: 'Hello, Ember. 你好，世界 🔥' },
-    { author: linus, text: 'Talk is cheap. Show me the code.' },
-    { author: grace, text: 'The most dangerous phrase is "we have always done it this way."' },
+    { id: 'seed-ada-hello', author: ada, text: 'Hello, Ember. 你好，世界 🔥' },
+    { id: 'seed-linus-code', author: linus, text: 'Talk is cheap. Show me the code.' },
+    {
+      id: 'seed-grace-phrase',
+      author: grace,
+      text: 'The most dangerous phrase is "we have always done it this way."',
+    },
   ];
   for (const p of posts) {
-    await prisma.post.create({ data: { authorId: p.author.id, text: p.text } });
+    await prisma.post.upsert({
+      where: { id: p.id },
+      update: {},
+      create: { id: p.id, authorId: p.author.id, text: p.text },
+    });
   }
 
   const adaPost = await prisma.post.findFirst({ where: { authorId: ada.id } });
   if (adaPost) {
-    await prisma.post.create({
-      data: { authorId: linus.id, text: '@ada welcome aboard!', replyToId: adaPost.id },
+    await prisma.post.upsert({
+      where: { id: 'seed-linus-welcome' },
+      update: {},
+      create: {
+        id: 'seed-linus-welcome',
+        authorId: linus.id,
+        text: '@ada welcome aboard!',
+        replyToId: adaPost.id,
+      },
     });
   }
 

@@ -1,22 +1,37 @@
-import { copyFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeEach } from 'vitest';
-import { TEMPLATE_DB } from './paths.js';
 
-// Per-file harness. Runs before the test module is imported, so DATABASE_URL is
-// set before db.ts's module-level PrismaClient reads it, and SESSION_SECRET is
-// present before createApp()'s guard runs. Each file gets an isolated copy of
-// the migrated template; vitest's default per-file process isolation keeps the
-// db.ts singleton bound to this file's DB.
+const DEFAULT_DATABASE_URL = 'postgresql://ember:ember@localhost:5432/ember?schema=public';
+const baseDatabaseUrl = process.env.DATABASE_URL ?? DEFAULT_DATABASE_URL;
+const workerId = process.env.VITEST_WORKER_ID ?? '0';
+const schemaName = `test_${process.pid}_${workerId}_${randomUUID().replaceAll('-', '')}`;
+const schemaUrl = new URL(baseDatabaseUrl);
+schemaUrl.searchParams.set('schema', schemaName);
+const serverRoot = fileURLToPath(new URL('..', import.meta.url));
+
+function quoteIdentifier(identifier: string) {
+  return `"${identifier.replaceAll('"', '""')}"`;
+}
+
+const admin = new PrismaClient({ datasources: { db: { url: baseDatabaseUrl } } });
+await admin.$executeRawUnsafe(`CREATE SCHEMA ${quoteIdentifier(schemaName)}`);
+await admin.$disconnect();
+
+// Run migrations per schema so every test file has a fresh PostgreSQL schema.
+// The schema URL is set before db.ts is imported, binding the singleton to the
+// isolated test database rather than the shared development schema.
+execFileSync('npx', ['prisma', 'migrate', 'deploy'], {
+  cwd: serverRoot,
+  stdio: 'inherit',
+  env: { ...process.env, DATABASE_URL: schemaUrl.toString() },
+});
+
+process.env.DATABASE_URL = schemaUrl.toString();
 process.env.SESSION_SECRET ??= 'test-secret';
 
-const workerId = process.env.VITEST_WORKER_ID ?? '0';
-const dbPath = path.join(tmpdir(), `ember-vitest-${process.pid}-${workerId}.db`);
-copyFileSync(TEMPLATE_DB, dbPath);
-process.env.DATABASE_URL = `file:${dbPath}`;
-
-// Import after DATABASE_URL is set so the singleton binds this file's test DB.
 const { prisma } = await import('../src/db.js');
 
 beforeEach(async () => {
@@ -27,5 +42,8 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await prisma.$disconnect();
-  rmSync(dbPath, { force: true });
+
+  const cleanup = new PrismaClient({ datasources: { db: { url: baseDatabaseUrl } } });
+  await cleanup.$executeRawUnsafe(`DROP SCHEMA ${quoteIdentifier(schemaName)} CASCADE`);
+  await cleanup.$disconnect();
 });
