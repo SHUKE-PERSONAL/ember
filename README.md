@@ -34,6 +34,19 @@ npm run dev
 The Vite dev server proxies `/api/*` to Express, so the browser uses a single
 origin.
 
+## Production
+
+Build the client and run only the Express server:
+
+```bash
+npm run build
+NODE_ENV=production npm run dev -w server
+```
+
+The production server serves `client/dist` and handles client-side routes on the
+same origin as the `/api/*` routes. Because production sessions use secure
+cookies, serve the application over HTTPS.
+
 ## Endpoints
 
 - `GET /api/health` → `{ "status": "ok" }`
