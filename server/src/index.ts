@@ -10,6 +10,13 @@ import { postsRouter } from './posts/routes.js';
 export function createApp() {
   const app = express();
 
+  // The production app sits behind nginx/Cloudflare. Trust the single local
+  // proxy so express-session can recognize the browser's HTTPS scheme and set
+  // its secure cookie even when the origin connection is plain HTTP.
+  if (process.env.NODE_ENV === 'production') {
+    app.set('trust proxy', 1);
+  }
+
   app.use(express.json());
 
   const SESSION_SECRET = process.env.SESSION_SECRET;
