@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api, ApiError, type Post } from '../api';
 import { foldAt, SOFT_LIMIT } from '../lib/grapheme';
 import { relativeTime } from '../lib/relativeTime';
+import { PostText } from './PostText';
 
 // A single timeline post. Text longer than 140 graphemes folds to the first
 // 140 with a 展开 / "Show more" toggle; full text is always present client-side.
@@ -67,9 +68,9 @@ export function PostItem({ post, fullText = false }: { post: Post; fullText?: bo
               <span className="handle">@{post.repostOf.author.handle}</span>
             </a>
             <p className="body">
-              {showFullText ? post.repostOf.text : (originalFolded?.truncated
+              <PostText text={showFullText ? post.repostOf.text : (originalFolded?.truncated
                 ? `${originalFolded.head}…`
-                : post.repostOf.text)}
+                : post.repostOf.text)} />
               {originalFolded?.truncated && !fullText && (
                 <button type="button" className="link more" onClick={() => setExpanded((v) => !v)}>
                   {expanded ? '收起 / Show less' : '展开 / Show more'}
@@ -80,7 +81,7 @@ export function PostItem({ post, fullText = false }: { post: Post; fullText?: bo
         </div>
       ) : (
         <p className="body">
-          {showFullText ? post.text : (truncated ? `${head}…` : post.text)}
+          <PostText text={showFullText ? post.text : (truncated ? `${head}…` : post.text)} />
           {truncated && !fullText && (
             <button type="button" className="link more" onClick={() => setExpanded((v) => !v)}>
               {expanded ? '收起 / Show less' : '展开 / Show more'}

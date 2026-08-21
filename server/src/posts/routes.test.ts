@@ -245,3 +245,44 @@ describe('post interactions', () => {
     expect(duplicateUnrepost.body).toEqual({ reposted: false });
   });
 });
+
+describe('mentions, topics, and search', () => {
+  it('lists exact topic matches newest first and finds users and posts', async () => {
+    const agent = request.agent(app);
+    await agent.post('/api/auth/register').send({
+      handle: 'search-user',
+      displayName: 'Search Person',
+      email: 'search-user@example.com',
+      password: 'correct-horse',
+    });
+
+    const older = await agent.post('/api/posts').send({
+      text: 'older #Ember post, with @search-user',
+    });
+    const newer = await agent.post('/api/posts').send({
+      text: 'newer #ember post',
+    });
+    await agent.post('/api/posts').send({ text: '#embers is different' });
+
+    const topic = await agent.get('/api/topics/ember/posts');
+    expect(topic.status).toBe(200);
+    expect(topic.body.posts.map((post: { id: string }) => post.id)).toEqual([
+      newer.body.id,
+      older.body.id,
+    ]);
+    expect(topic.body.posts[0].text).toBe('newer #ember post');
+
+    const search = await agent.get('/api/search').query({ q: 'search' });
+    expect(search.status).toBe(200);
+    expect(search.body.users).toEqual([
+      expect.objectContaining({ handle: 'search-user', displayName: 'Search Person' }),
+    ]);
+    expect(search.body.posts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: older.body.id }),
+    ]));
+
+    const empty = await agent.get('/api/search').query({ q: '   ' });
+    expect(empty.status).toBe(200);
+    expect(empty.body).toEqual({ posts: [], users: [], nextCursor: null });
+  });
+});
