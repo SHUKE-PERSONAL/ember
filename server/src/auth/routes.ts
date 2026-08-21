@@ -40,12 +40,14 @@ authRouter.post('/auth/register', asyncHandler(async (req: Request, res: Respons
 }));
 
 authRouter.post('/auth/login', asyncHandler(async (req: Request, res: Response) => {
-  const { email, password } = req.body ?? {};
-  if (!isNonEmptyString(email) || !isNonEmptyString(password)) {
-    return res.status(400).json({ error: 'email and password are required' });
+  const { identifier, password } = req.body ?? {};
+  if (!isNonEmptyString(identifier) || !isNonEmptyString(password)) {
+    return res.status(400).json({ error: 'identifier and password are required' });
   }
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await prisma.user.findFirst({
+    where: { OR: [{ email: identifier }, { handle: identifier }] },
+  });
   if (!user || !(await verifyPassword(password, user.passwordHash))) {
     return res.status(401).json({ error: 'invalid credentials' });
   }

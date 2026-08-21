@@ -109,7 +109,7 @@ export const api = {
   me: () => request<User>('/api/me'),
   register: (body: { handle: string; displayName?: string; email: string; password: string }) =>
     request<User>('/api/auth/register', { method: 'POST', body: JSON.stringify(body) }),
-  login: (body: { email: string; password: string }) =>
+  login: (body: { identifier: string; password: string }) =>
     request<User>('/api/auth/login', { method: 'POST', body: JSON.stringify(body) }),
   logout: () => request<void>('/api/auth/logout', { method: 'POST' }),
   createPost: (text: string) =>
