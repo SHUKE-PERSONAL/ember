@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { AuthGate } from './components/AuthGate';
 import { Compose } from './components/Compose';
 import { Profile } from './components/Profile';
+import { PostDetail } from './components/PostDetail';
 import { Timeline, type TimelineHandle } from './components/Timeline';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import './styles.css';
@@ -9,12 +10,15 @@ import './styles.css';
 export default function App() {
   const timeline = useRef<TimelineHandle>(null);
   const profileHandle = getProfileHandle(window.location.pathname);
+  const postId = getPostId(window.location.pathname);
 
   return (
     <AuthGate unauthenticated={(showAuth) => <WelcomeScreen onEnter={showAuth} />}>
       {(user, logout) => (
         profileHandle ? (
           <Profile handle={profileHandle} user={user} logout={logout} />
+        ) : postId ? (
+          <PostDetail id={postId} user={user} logout={logout} />
         ) : (
           <main className="app">
             <header className="topbar">
@@ -35,6 +39,16 @@ export default function App() {
       )}
     </AuthGate>
   );
+}
+
+function getPostId(pathname: string) {
+  const match = pathname.match(/^\/posts\/([^/]+)\/?$/);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return null;
+  }
 }
 
 function getProfileHandle(pathname: string) {

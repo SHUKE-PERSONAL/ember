@@ -160,10 +160,62 @@ button.more {
   color: var(--muted);
 }
 
+.post-time {
+  color: inherit;
+  text-decoration: none;
+}
+
 .post .body {
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.post-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.6rem;
+  font-size: 0.9em;
+}
+
+.post-actions a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.repost {
+  margin-top: 0.4rem;
+}
+
+.repost-label {
+  margin: 0 0 0.35rem;
+  color: var(--muted);
+  font-size: 0.9em;
+}
+
+.repost-original {
+  padding: 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+
+.repost-original .body {
+  margin-top: 0.35rem;
+}
+
+.back-link {
+  display: inline-block;
+  margin-top: 1rem;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.reply-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
 }
 
 .load-more {

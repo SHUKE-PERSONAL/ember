@@ -46,6 +46,10 @@ model Post {
   createdAt  DateTime @default(now())
 
   likes Like[]
+
+  // A user can create at most one repost row for an original post. PostgreSQL
+  // permits multiple NULLs here, while every repost uses a non-null target.
+  @@unique([authorId, repostOfId])
 }
 
 model Follow {
