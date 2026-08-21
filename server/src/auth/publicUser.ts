@@ -7,6 +7,7 @@ export const publicUser = {
   displayName: true,
   email: true,
   bio: true,
+  emailVerifiedAt: true,
   createdAt: true,
 } as const;
 

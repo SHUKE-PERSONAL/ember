@@ -40,6 +40,7 @@ beforeEach(async () => {
   await prisma.like.deleteMany();
   await prisma.post.deleteMany();
   await prisma.follow.deleteMany();
+  await prisma.emailVerification.deleteMany();
   await prisma.user.deleteMany();
 });
 

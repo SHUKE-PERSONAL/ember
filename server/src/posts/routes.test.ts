@@ -1,8 +1,19 @@
 import { describe, it, expect } from 'vitest';
 import request from 'supertest';
+import { prisma } from '../db.js';
 import { createApp } from '../index.js';
 
 const app = createApp();
+
+async function registerAndVerify(agent: ReturnType<typeof request.agent>, data: Record<string, string>) {
+  const registration = await agent.post('/api/auth/register').send(data);
+  expect(registration.status).toBe(201);
+  await prisma.user.update({
+    where: { id: registration.body.id },
+    data: { emailVerifiedAt: new Date() },
+  });
+  return registration;
+}
 
 describe('POST /api/posts', () => {
   it('rejects an unauthenticated request with 401', async () => {
@@ -14,7 +25,7 @@ describe('POST /api/posts', () => {
     // A supertest agent persists the session cookie across requests.
     const agent = request.agent(app);
 
-    const register = await agent.post('/api/auth/register').send({
+    const register = await registerAndVerify(agent, {
       handle: 'ada',
       email: 'ada@example.com',
       password: 'correct-horse',
@@ -32,12 +43,77 @@ describe('POST /api/posts', () => {
   });
 });
 
+describe('email activation posting gate', () => {
+  it('blocks post creation actions while leaving likes and follows available', async () => {
+    const unverified = request.agent(app);
+    const verified = request.agent(app);
+    await unverified.post('/api/auth/register').send({
+      handle: 'unverified-poster',
+      email: 'unverified-poster@example.com',
+      password: 'correct-horse',
+    });
+    await registerAndVerify(verified, {
+      handle: 'verified-author',
+      email: 'verified-author@example.com',
+      password: 'correct-horse',
+    });
+
+    const original = await verified.post('/api/posts').send({ text: 'activation target' });
+    expect(original.status).toBe(201);
+    const post = await unverified.post('/api/posts').send({ text: 'blocked post' });
+    expect(post.status).toBe(403);
+    expect(post.body).toEqual({ error: 'email not verified' });
+
+    const reply = await unverified.post(`/api/posts/${original.body.id}/reply`).send({ text: 'blocked reply' });
+    expect(reply.status).toBe(403);
+    expect(reply.body).toEqual({ error: 'email not verified' });
+    const repost = await unverified.post(`/api/posts/${original.body.id}/repost`);
+    expect(repost.status).toBe(403);
+    expect(repost.body).toEqual({ error: 'email not verified' });
+
+    const like = await unverified.post(`/api/posts/${original.body.id}/like`);
+    expect(like.status).toBe(200);
+    const follow = await unverified.post('/api/users/verified-author/follow');
+    expect(follow.status).toBe(200);
+  });
+
+  it('reads cooldown settings per request and falls back safely for invalid values', async () => {
+    const previousCooldown = process.env.POST_COOLDOWN_SECONDS;
+    const agent = request.agent(app);
+    await registerAndVerify(agent, {
+      handle: 'cooldown-user',
+      email: 'cooldown-user@example.com',
+      password: 'correct-horse',
+    });
+
+    try {
+      process.env.POST_COOLDOWN_SECONDS = '3600';
+      const blocked = await agent.post('/api/posts').send({ text: 'wait' });
+      expect(blocked.status).toBe(403);
+      expect(blocked.body.error).toBe('posting cooldown');
+      expect(blocked.body.retryAfterSeconds).toEqual(expect.any(Number));
+      expect(blocked.body.retryAfterSeconds).toBeGreaterThan(0);
+
+      process.env.POST_COOLDOWN_SECONDS = 'not-a-number';
+      const invalidValue = await agent.post('/api/posts').send({ text: 'invalid is safe' });
+      expect(invalidValue.status).toBe(201);
+
+      process.env.POST_COOLDOWN_SECONDS = '0';
+      const reset = await agent.post('/api/posts').send({ text: 'cooldown reset' });
+      expect(reset.status).toBe(201);
+    } finally {
+      if (previousCooldown === undefined) delete process.env.POST_COOLDOWN_SECONDS;
+      else process.env.POST_COOLDOWN_SECONDS = previousCooldown;
+    }
+  });
+});
+
 describe('user profiles and follows', () => {
   it('returns a profile, keeps authored posts scoped, and updates follow state', async () => {
     const author = request.agent(app);
     const follower = request.agent(app);
 
-    await author.post('/api/auth/register').send({
+    await registerAndVerify(author, {
       handle: 'profile-author',
       displayName: 'Profile Author',
       email: 'profile-author@example.com',
@@ -45,7 +121,7 @@ describe('user profiles and follows', () => {
       bio: 'Writes posts',
     });
     await author.post('/api/posts').send({ text: 'author post' });
-    await follower.post('/api/auth/register').send({
+    await registerAndVerify(follower, {
       handle: 'profile-follower',
       email: 'profile-follower@example.com',
       password: 'correct-horse',
@@ -96,7 +172,7 @@ describe('user profiles and follows', () => {
 
   it('rejects self-follow and paginates profile posts', async () => {
     const agent = request.agent(app);
-    await agent.post('/api/auth/register').send({
+    await registerAndVerify(agent, {
       handle: 'pagination-author',
       email: 'pagination-author@example.com',
       password: 'correct-horse',
@@ -137,12 +213,12 @@ describe('post interactions', () => {
     const author = request.agent(app);
     const liker = request.agent(app);
 
-    await author.post('/api/auth/register').send({
+    await registerAndVerify(author, {
       handle: 'interaction-author',
       email: 'interaction-author@example.com',
       password: 'correct-horse',
     });
-    await liker.post('/api/auth/register').send({
+    await registerAndVerify(liker, {
       handle: 'interaction-liker',
       email: 'interaction-liker@example.com',
       password: 'correct-horse',
@@ -191,17 +267,17 @@ describe('post interactions', () => {
     const reposter = request.agent(app);
     const follower = request.agent(app);
 
-    await author.post('/api/auth/register').send({
+    await registerAndVerify(author, {
       handle: 'repost-author',
       email: 'repost-author@example.com',
       password: 'correct-horse',
     });
-    await reposter.post('/api/auth/register').send({
+    await registerAndVerify(reposter, {
       handle: 'reposter',
       email: 'reposter@example.com',
       password: 'correct-horse',
     });
-    await follower.post('/api/auth/register').send({
+    await registerAndVerify(follower, {
       handle: 'repost-follower',
       email: 'repost-follower@example.com',
       password: 'correct-horse',
@@ -249,7 +325,7 @@ describe('post interactions', () => {
 describe('mentions, topics, and search', () => {
   it('lists exact topic matches newest first and finds users and posts', async () => {
     const agent = request.agent(app);
-    await agent.post('/api/auth/register').send({
+    await registerAndVerify(agent, {
       handle: 'search-user',
       displayName: 'Search Person',
       email: 'search-user@example.com',
