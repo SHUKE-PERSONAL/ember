@@ -5,6 +5,7 @@ import { asyncHandler } from '../util/asyncHandler.js';
 import { requireAuth } from '../auth/requireAuth.js';
 import { publicAuthor } from '../auth/publicUser.js';
 import { graphemeCount, MAX_GRAPHEMES } from '../util/grapheme.js';
+import { normalizeTopicTag, postHasTopic } from './tokens.js';
 
 export const postsRouter = Router();
 
@@ -80,6 +81,29 @@ function parsePostText(req: Request, res: Response) {
   return text;
 }
 
+function parseLimit(req: Request) {
+  const rawLimit = Number(req.query.limit);
+  return Number.isFinite(rawLimit)
+    ? Math.min(Math.max(Math.trunc(rawLimit), 1), MAX_LIMIT)
+    : DEFAULT_LIMIT;
+}
+
+function parseCursor(req: Request) {
+  return typeof req.query.cursor === 'string' && req.query.cursor.length > 0
+    ? req.query.cursor
+    : undefined;
+}
+
+function paginateRows<T extends { id: string }>(rows: T[], cursor: string | undefined, limit: number) {
+  const cursorIndex = cursor ? rows.findIndex((row) => row.id === cursor) : -1;
+  const start = cursorIndex >= 0 ? cursorIndex + 1 : 0;
+  const page = rows.slice(start, start + limit + 1);
+  return {
+    rows: page.slice(0, limit),
+    nextCursor: page.length > limit ? page[limit - 1].id : null,
+  };
+}
+
 postsRouter.post('/posts', asyncHandler(async (req: Request, res: Response) => {
   const text = parsePostText(req, res);
   if (text === null) return;
@@ -89,6 +113,62 @@ postsRouter.post('/posts', asyncHandler(async (req: Request, res: Response) => {
     select: postSelect(req.session.userId!),
   });
   return res.status(201).json(serializePost(post));
+}));
+
+postsRouter.get('/topics/:tag/posts', asyncHandler(async (req: Request, res: Response) => {
+  const tag = normalizeTopicTag(req.params.tag);
+  if (!tag) return res.status(400).json({ error: 'invalid topic' });
+
+  const rows = await prisma.post.findMany({
+    where: { text: { contains: `#${tag}`, mode: 'insensitive' } },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    select: postSelect(req.session.userId!),
+  });
+  const matchingRows = rows.filter((post) => postHasTopic(post.text, tag));
+  const page = paginateRows(matchingRows, parseCursor(req), parseLimit(req));
+
+  return res.json({
+    posts: page.rows.map(serializePost),
+    nextCursor: page.nextCursor,
+  });
+}));
+
+postsRouter.get('/search', asyncHandler(async (req: Request, res: Response) => {
+  const query = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+  if (!query) return res.json({ posts: [], users: [], nextCursor: null });
+
+  const limit = parseLimit(req);
+  const cursor = parseCursor(req);
+  const [rows, users] = await Promise.all([
+    prisma.post.findMany({
+      where: {
+        OR: [
+          { text: { contains: query, mode: 'insensitive' } },
+          { author: { handle: { contains: query, mode: 'insensitive' } } },
+          { author: { displayName: { contains: query, mode: 'insensitive' } } },
+        ],
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      select: postSelect(req.session.userId!),
+    }),
+    prisma.user.findMany({
+      where: {
+        OR: [
+          { handle: { contains: query, mode: 'insensitive' } },
+          { displayName: { contains: query, mode: 'insensitive' } },
+        ],
+      },
+      orderBy: [{ handle: 'asc' }],
+      take: MAX_LIMIT,
+      select: publicAuthor,
+    }),
+  ]);
+
+  const posts = rows.slice(0, limit).map(serializePost);
+  const nextCursor = rows.length > limit ? posts[posts.length - 1].id : null;
+  return res.json({ posts, users, nextCursor });
 }));
 
 postsRouter.get('/posts/:id', asyncHandler(async (req: Request, res: Response) => {
@@ -213,13 +293,8 @@ postsRouter.delete('/posts/:id/repost', asyncHandler(async (req: Request, res: R
 postsRouter.get('/timeline', asyncHandler(async (req: Request, res: Response) => {
   const userId = req.session.userId!;
 
-  const rawLimit = Number(req.query.limit);
-  const limit = Number.isFinite(rawLimit)
-    ? Math.min(Math.max(Math.trunc(rawLimit), 1), MAX_LIMIT)
-    : DEFAULT_LIMIT;
-  const cursor = typeof req.query.cursor === 'string' && req.query.cursor.length > 0
-    ? req.query.cursor
-    : undefined;
+  const limit = parseLimit(req);
+  const cursor = parseCursor(req);
 
   const followed = await prisma.follow.findMany({
     where: { followerId: userId },

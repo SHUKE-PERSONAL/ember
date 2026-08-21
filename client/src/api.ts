@@ -55,6 +55,10 @@ export interface Timeline {
   nextCursor: string | null;
 }
 
+export interface SearchResults extends Timeline {
+  users: Author[];
+}
+
 export interface PostDetail {
   post: Post;
   replies: Post[];
@@ -127,6 +131,13 @@ export const api = {
     request<RepostState>(`/api/posts/${encodeURIComponent(id)}/repost`, { method: 'DELETE' }),
   timeline: (cursor?: string) =>
     request<Timeline>(`/api/timeline${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`),
+  topicPosts: (tag: string, cursor?: string) =>
+    request<Timeline>(`/api/topics/${encodeURIComponent(tag)}/posts${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`),
+  search: (query: string, cursor?: string) => {
+    const params = new URLSearchParams({ q: query });
+    if (cursor) params.set('cursor', cursor);
+    return request<SearchResults>(`/api/search?${params.toString()}`);
+  },
   profile: (handle: string) => request<Profile>(userPath(handle)),
   profilePosts: (handle: string, cursor?: string) =>
     request<Timeline>(`${userPath(handle)}/posts${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`),
