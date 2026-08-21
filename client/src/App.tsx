@@ -2,13 +2,14 @@ import { useRef } from 'react';
 import { AuthGate } from './components/AuthGate';
 import { Compose } from './components/Compose';
 import { Timeline, type TimelineHandle } from './components/Timeline';
+import { WelcomeScreen } from './components/WelcomeScreen';
 import './styles.css';
 
 export default function App() {
   const timeline = useRef<TimelineHandle>(null);
 
   return (
-    <AuthGate>
+    <AuthGate unauthenticated={(showAuth) => <WelcomeScreen onEnter={showAuth} />}>
       {(user, logout) => (
         <main className="app">
           <header className="topbar">

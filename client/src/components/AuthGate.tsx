@@ -2,11 +2,19 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { api, ApiError, type User } from '../api';
 
 // Minimal session gate. Resolves the current user via /api/me; when absent it
-// renders a combined login / register form. The richer profile UI is #4 — this
+// renders the combined login / register form by default. Callers may put a
+// public screen in front of that form. The richer profile UI is #4 — this
 // exists only so #3 has a "current user".
-export function AuthGate({ children }: { children: (user: User, logout: () => void) => ReactNode }) {
+export function AuthGate({
+  children,
+  unauthenticated,
+}: {
+  children: (user: User, logout: () => void) => ReactNode;
+  unauthenticated?: (showAuth: () => void) => ReactNode;
+}) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showAuth, setShowAuth] = useState(false);
 
   useEffect(() => {
     api.me()
@@ -16,10 +24,16 @@ export function AuthGate({ children }: { children: (user: User, logout: () => vo
   }, []);
 
   if (loading) return <p className="muted">Loading…</p>;
-  if (!user) return <AuthForm onAuthed={setUser} />;
+  if (!user) {
+    if (showAuth || !unauthenticated) return <AuthForm onAuthed={setUser} />;
+    return unauthenticated(() => setShowAuth(true));
+  }
 
   const logout = () => {
-    api.logout().finally(() => setUser(null));
+    api.logout().finally(() => {
+      setUser(null);
+      setShowAuth(false);
+    });
   };
   return <>{children(user, logout)}</>;
 }
