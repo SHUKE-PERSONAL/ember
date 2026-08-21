@@ -43,18 +43,26 @@ jobs:
       - name: Build, migrate, restart, and gate the service
         run: |
           set -euo pipefail
+          # The remote script travels on ssh's stdin, so a command that attaches
+          # stdin can swallow the lines bash has not read yet — bash then hits EOF
+          # and exits 0 with the rest of the deployment silently skipped. Keeping
+          # the body inside a function makes bash read the whole script before it
+          # runs anything, so the remaining steps cannot be consumed.
           ssh -i "$RUNNER_TEMP/ember-deploy-key" "$SSH_USER@$SSH_HOST" bash -s -- "$DEPLOY_PATH" <<'REMOTE'
           set -euo pipefail
-          deploy_path="$1"
-          cd "$deploy_path"
-          compose=(docker compose --env-file .env.production -f docker-compose.production.yml)
+          deploy() {
+            local deploy_path="$1"
+            cd "$deploy_path"
+            local compose=(docker compose --env-file .env.production -f docker-compose.production.yml)
 
-          "${compose[@]}" build --pull ember
-          "${compose[@]}" up -d --wait postgres
-          "${compose[@]}" run --rm --no-deps ember ./node_modules/.bin/prisma migrate deploy --schema server/prisma/schema.prisma
-          "${compose[@]}" up -d --wait --no-build --force-recreate ember
-          curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-all-errors \
-            http://127.0.0.1:3001/api/health | grep -Fq '{"status":"ok"}'
+            "${compose[@]}" build --pull ember
+            "${compose[@]}" up -d --wait postgres
+            "${compose[@]}" run --rm -T --no-deps ember ./node_modules/.bin/prisma migrate deploy --schema server/prisma/schema.prisma
+            "${compose[@]}" up -d --wait --no-build --force-recreate ember
+            curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-all-errors \
+              http://127.0.0.1:3001/api/health | grep -Fq '{"status":"ok"}'
+          }
+          deploy "$1"
           REMOTE
 
       - name: Verify the public HTTPS edge
