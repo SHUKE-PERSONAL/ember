@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import ansiAsset from '../assets/SHUKE.ANS?url';
 import { ansiStyleClass, parseAnsiScreen, type AnsiLine } from '../lib/ansi';
 
+export const WELCOME_TRANSITION_DELAY_MS = 1500;
+
 export function WelcomeScreen({ onEnter }: { onEnter: () => void }) {
   const [screen, setScreen] = useState<AnsiLine[] | null>(null);
   const [error, setError] = useState(false);
@@ -23,6 +25,13 @@ export function WelcomeScreen({ onEnter }: { onEnter: () => void }) {
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!screen || error) return;
+
+    const timeout = window.setTimeout(onEnter, WELCOME_TRANSITION_DELAY_MS);
+    return () => window.clearTimeout(timeout);
+  }, [error, onEnter, screen]);
 
   return (
     <main className="bbs-landing">
@@ -46,16 +55,7 @@ export function WelcomeScreen({ onEnter }: { onEnter: () => void }) {
         ) : (
           <p className="bbs-status">{error ? 'Welcome screen unavailable.' : 'Loading welcome screen…'}</p>
         )}
-        <WelcomeAction onEnter={onEnter} disabled={!screen} />
       </section>
     </main>
-  );
-}
-
-export function WelcomeAction({ onEnter, disabled }: { onEnter: () => void; disabled: boolean }) {
-  return (
-    <button type="button" className="bbs-enter" onClick={onEnter} disabled={disabled}>
-      Enter the BBS
-    </button>
   );
 }
