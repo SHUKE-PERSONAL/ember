@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ember-production-deploy
+  cancel-in-progress: false
+
 env:
   DEPLOY_PATH: /var/www/ember
   SSH_HOST: ${{ secrets.SSH_HOST }}

@@ -51,8 +51,9 @@ cookies, serve the application over HTTPS.
 
 The production deployment runs the app and PostgreSQL in Docker Compose on
 `arm/sydney2` (`152.69.173.242`). The app binds to `127.0.0.1:3001`; nginx
-proxies the hostname to that private port, and Cloudflare provides the public
-HTTPS edge.
+terminates TLS with a Certbot certificate and proxies the hostname to that
+private port, while Cloudflare proxies the public HTTPS connection in Full
+SSL mode.
 
 One-time host setup:
 
@@ -64,22 +65,31 @@ One-time host setup:
    `DATABASE_URL`. Keep
    `DATABASE_URL` pointed at the Compose service name `postgres`; this file is
    host-only, should be mode `600`, and is preserved by deployments.
-3. Create the nginx site from
-   [`deploy/nginx/bbs.shukelabs.com.conf`](deploy/nginx/bbs.shukelabs.com.conf),
-   enable it, and reload nginx after `nginx -t` succeeds. For example:
+3. After the proxied DNS A record for `bbs.shukelabs.com` resolves, bootstrap
+   the nginx certificate. Sydney2 keeps host configs in `/etc/nginx/conf.d`.
+   Install a temporary port-80 server block for the hostname, then request the
+   certificate:
 
    ```bash
+   sudo tee /etc/nginx/conf.d/bbs.shukelabs.com.conf >/dev/null <<'NGINX'
+   server {
+       listen 80;
+       listen [::]:80;
+       server_name bbs.shukelabs.com;
+       location / { return 404; }
+   }
+   NGINX
+   sudo nginx -t && sudo systemctl reload nginx
+   sudo certbot certonly --nginx -d bbs.shukelabs.com
    sudo cp /var/www/ember/deploy/nginx/bbs.shukelabs.com.conf \
-     /etc/nginx/sites-available/bbs.shukelabs.com
-   sudo ln -s /etc/nginx/sites-available/bbs.shukelabs.com \
-     /etc/nginx/sites-enabled/bbs.shukelabs.com
+     /etc/nginx/conf.d/bbs.shukelabs.com.conf
    sudo nginx -t && sudo systemctl reload nginx
    ```
 4. In the `shukelabs.com` Cloudflare zone, create an A record for `bbs` to
-   `152.69.173.242` with the proxy enabled. With the supplied plain-HTTP nginx
-   origin, use Cloudflare's Flexible SSL mode; the nginx template preserves
-   Cloudflare's `X-Forwarded-Proto: https` header so the browser-facing
-   connection remains HTTPS and the session cookie remains secure.
+   `152.69.173.242` with the proxy enabled. Keep the zone SSL mode at Full;
+   nginx terminates TLS with the Certbot certificate, and the template
+   preserves Cloudflare's `X-Forwarded-Proto: https` header so the session
+   cookie remains secure.
 5. Add these GitHub Actions repository secrets: `SSH_HOST`, `SSH_USER`, and
    `SSH_PRIVATE_KEY`. The deploy workflow uses them to ship the checked-out
    commit, build on the native ARM host, migrate, restart, and health-check.
