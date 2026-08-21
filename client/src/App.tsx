@@ -6,6 +6,7 @@ import { PostDetail } from './components/PostDetail';
 import { Timeline, type TimelineHandle } from './components/Timeline';
 import { Search } from './components/Search';
 import { Topic } from './components/Topic';
+import { Messages } from './components/Messages';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import './styles.css';
 
@@ -15,6 +16,7 @@ export default function App() {
   const postId = getPostId(window.location.pathname);
   const topicTag = getTopicTag(window.location.pathname);
   const searchQuery = getSearchQuery(window.location);
+  const messageHandle = getMessageHandle(window.location.pathname);
 
   return (
     <AuthGate unauthenticated={(showAuth) => <WelcomeScreen onEnter={showAuth} />}>
@@ -27,12 +29,15 @@ export default function App() {
           <Topic tag={topicTag} user={user} logout={logout} />
         ) : searchQuery !== null ? (
           <Search query={searchQuery} user={user} logout={logout} />
+        ) : messageHandle !== undefined ? (
+          <Messages handle={messageHandle} user={user} logout={logout} />
         ) : (
           <main className="app">
             <header className="topbar">
               <h1>Ember</h1>
               <div className="who">
                 <a href="/search">Search</a>
+                <a href="/messages">Messages</a>
                 <a className="handle profile-link" href={`/@${encodeURIComponent(user.handle)}`}>
                   @{user.handle}
                 </a>
@@ -83,4 +88,15 @@ function getTopicTag(pathname: string) {
 function getSearchQuery(location: Location) {
   if (!/^\/search\/?$/.test(location.pathname)) return null;
   return new URLSearchParams(location.search).get('q') ?? '';
+}
+
+function getMessageHandle(pathname: string): string | null | undefined {
+  const match = pathname.match(/^\/messages(?:\/([^/]+))?\/?$/);
+  if (!match) return undefined;
+  if (!match[1]) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return null;
+  }
 }

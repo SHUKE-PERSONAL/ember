@@ -31,10 +31,12 @@ execFileSync('npx', ['prisma', 'migrate', 'deploy'], {
 
 process.env.DATABASE_URL = schemaUrl.toString();
 process.env.SESSION_SECRET ??= 'test-secret';
+process.env.MESSAGE_ENCRYPTION_KEY ??= 'test-message-encryption-key';
 
 const { prisma } = await import('../src/db.js');
 
 beforeEach(async () => {
+  await prisma.message.deleteMany();
   await prisma.like.deleteMany();
   await prisma.post.deleteMany();
   await prisma.follow.deleteMany();
