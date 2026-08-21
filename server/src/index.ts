@@ -4,6 +4,7 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import session from 'express-session';
 import { authRouter } from './auth/routes.js';
 import { postsRouter } from './posts/routes.js';
+import { usersRouter } from './users/routes.js';
 
 // Builds the fully-configured Express app without binding a port, so tests can
 // drive it in-process with supertest. index.ts's tail composes this and listens.
@@ -43,6 +44,7 @@ export function createApp() {
   });
 
   app.use('/api', authRouter);
+  app.use('/api', usersRouter);
   app.use('/api', postsRouter);
 
   if (process.env.NODE_ENV === 'production') {

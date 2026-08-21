@@ -12,8 +12,10 @@ export function PostItem({ post }: { post: Post }) {
   return (
     <article className="post">
       <header>
-        <span className="name">{post.author.displayName}</span>
-        <span className="handle">@{post.author.handle}</span>
+        <a className="post-author" href={`/@${encodeURIComponent(post.author.handle)}`}>
+          <span className="name">{post.author.displayName}</span>
+          <span className="handle">@{post.author.handle}</span>
+        </a>
         <span className="dot">·</span>
         <time dateTime={post.createdAt}>{relativeTime(post.createdAt)}</time>
       </header>
