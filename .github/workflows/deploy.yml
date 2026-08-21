@@ -1,0 +1,64 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ember-production-deploy
+  cancel-in-progress: false
+
+env:
+  DEPLOY_PATH: /var/www/ember
+  SSH_HOST: ${{ secrets.SSH_HOST }}
+  SSH_USER: ${{ secrets.SSH_USER }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$RUNNER_TEMP/ember-deploy-key"
+          chmod 600 "$RUNNER_TEMP/ember-deploy-key"
+          ssh-keyscan -H "$SSH_HOST" >> "$HOME/.ssh/known_hosts"
+
+      - name: Ship exact repository HEAD
+        run: |
+          set -euo pipefail
+          git archive --format=tar "$GITHUB_SHA" \
+            | ssh -i "$RUNNER_TEMP/ember-deploy-key" "$SSH_USER@$SSH_HOST" \
+                "set -eu; mkdir -p '$DEPLOY_PATH'; find '$DEPLOY_PATH' -mindepth 1 -maxdepth 1 ! -name .env.production -exec rm -rf -- {} +; tar -xf - -C '$DEPLOY_PATH'"
+
+      - name: Build, migrate, restart, and gate the service
+        run: |
+          set -euo pipefail
+          ssh -i "$RUNNER_TEMP/ember-deploy-key" "$SSH_USER@$SSH_HOST" bash -s -- "$DEPLOY_PATH" <<'REMOTE'
+          set -euo pipefail
+          deploy_path="$1"
+          cd "$deploy_path"
+          compose=(docker compose --env-file .env.production -f docker-compose.production.yml)
+
+          "${compose[@]}" build --pull ember
+          "${compose[@]}" up -d --wait postgres
+          "${compose[@]}" run --rm --no-deps ember ./node_modules/.bin/prisma migrate deploy --schema server/prisma/schema.prisma
+          "${compose[@]}" up -d --wait --no-build --force-recreate ember
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-all-errors \
+            http://127.0.0.1:3001/api/health | grep -Fq '{"status":"ok"}'
+          REMOTE
+
+      - name: Verify the public HTTPS edge
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-all-errors \
+            https://bbs.shukelabs.com/api/health | grep -Fq '{"status":"ok"}'

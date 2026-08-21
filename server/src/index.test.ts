@@ -13,7 +13,6 @@ execFileSync('npm', ['run', 'build'], { cwd: repositoryRoot, stdio: 'inherit' })
 
 process.env.NODE_ENV = 'production';
 const app = createApp();
-app.set('trust proxy', 1);
 
 afterAll(() => {
   if (previousNodeEnv === undefined) {
