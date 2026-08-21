@@ -131,3 +131,117 @@ describe('user profiles and follows', () => {
     ]);
   });
 });
+
+describe('post interactions', () => {
+  it('supports idempotent likes and full-text replies on post detail', async () => {
+    const author = request.agent(app);
+    const liker = request.agent(app);
+
+    await author.post('/api/auth/register').send({
+      handle: 'interaction-author',
+      email: 'interaction-author@example.com',
+      password: 'correct-horse',
+    });
+    await liker.post('/api/auth/register').send({
+      handle: 'interaction-liker',
+      email: 'interaction-liker@example.com',
+      password: 'correct-horse',
+    });
+
+    const created = await author.post('/api/posts').send({ text: 'the original' });
+    expect(created.status).toBe(201);
+    const postId = created.body.id;
+
+    const firstLike = await liker.post(`/api/posts/${postId}/like`);
+    expect(firstLike.status).toBe(200);
+    expect(firstLike.body).toEqual({ liked: true, likeCount: 1 });
+    const duplicateLike = await liker.post(`/api/posts/${postId}/like`);
+    expect(duplicateLike.body).toEqual({ liked: true, likeCount: 1 });
+
+    const unlike = await liker.delete(`/api/posts/${postId}/like`);
+    expect(unlike.body).toEqual({ liked: false, likeCount: 0 });
+    const duplicateUnlike = await liker.delete(`/api/posts/${postId}/like`);
+    expect(duplicateUnlike.body).toEqual({ liked: false, likeCount: 0 });
+
+    const longReplyText = '界'.repeat(141);
+    const reply = await liker.post(`/api/posts/${postId}/reply`).send({ text: longReplyText });
+    expect(reply.status).toBe(201);
+    expect(reply.body.text).toBe(longReplyText);
+    expect(reply.body.replyToId).toBe(postId);
+
+    const tooLong = await liker
+      .post(`/api/posts/${postId}/reply`)
+      .send({ text: '界'.repeat(1025) });
+    expect(tooLong.status).toBe(422);
+
+    const detail = await author.get(`/api/posts/${postId}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body.post.text).toBe('the original');
+    expect(detail.body.replies).toHaveLength(1);
+    expect(detail.body.replies[0].text).toBe(longReplyText);
+
+    const timeline = await liker.get('/api/timeline');
+    expect(timeline.body.posts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: reply.body.id, text: longReplyText }),
+    ]));
+  });
+
+  it('creates one repost and delivers it to a reposter follower', async () => {
+    const author = request.agent(app);
+    const reposter = request.agent(app);
+    const follower = request.agent(app);
+
+    await author.post('/api/auth/register').send({
+      handle: 'repost-author',
+      email: 'repost-author@example.com',
+      password: 'correct-horse',
+    });
+    await reposter.post('/api/auth/register').send({
+      handle: 'reposter',
+      email: 'reposter@example.com',
+      password: 'correct-horse',
+    });
+    await follower.post('/api/auth/register').send({
+      handle: 'repost-follower',
+      email: 'repost-follower@example.com',
+      password: 'correct-horse',
+    });
+    await follower.post('/api/users/reposter/follow');
+
+    const original = await author.post('/api/posts').send({ text: 'share this' });
+    const first = await reposter.post(`/api/posts/${original.body.id}/repost`);
+    expect(first.status).toBe(201);
+    expect(first.body.reposted).toBe(true);
+    expect(first.body.post.repostOf).toMatchObject({
+      id: original.body.id,
+      text: 'share this',
+    });
+
+    const duplicate = await reposter.post(`/api/posts/${original.body.id}/repost`);
+    expect(duplicate.status).toBe(201);
+    expect(duplicate.body.post.id).toBe(first.body.post.id);
+
+    const reposts = await reposter.get('/api/users/reposter/posts');
+    expect(reposts.body.posts.filter((post: { repostOfId: string | null }) => post.repostOfId).length)
+      .toBe(1);
+
+    const timeline = await follower.get('/api/timeline');
+    expect(timeline.body.posts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: first.body.post.id,
+        author: expect.objectContaining({ handle: 'reposter' }),
+        repostOf: expect.objectContaining({
+          id: original.body.id,
+          text: 'share this',
+        }),
+      }),
+    ]));
+
+    const repostLike = await follower.post(`/api/posts/${first.body.post.id}/like`);
+    expect(repostLike.body).toEqual({ liked: true, likeCount: 1 });
+    const unrepost = await reposter.delete(`/api/posts/${original.body.id}/repost`);
+    expect(unrepost.body).toEqual({ reposted: false });
+    const duplicateUnrepost = await reposter.delete(`/api/posts/${original.body.id}/repost`);
+    expect(duplicateUnrepost.body).toEqual({ reposted: false });
+  });
+});

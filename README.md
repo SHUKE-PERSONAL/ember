@@ -114,6 +114,10 @@ curl --fail --silent https://bbs.shukelabs.com/api/health
 - `GET /api/users/:handle` → public profile, follower/following counts, and viewer follow state
 - `GET /api/users/:handle/posts` → cursor-paginated posts authored by that user
 - `POST /api/users/:handle/follow` / `DELETE /api/users/:handle/follow` → follow or unfollow a user
+- `GET /api/posts/:id` → a post and its direct replies
+- `POST /api/posts/:id/reply` → create a reply
+- `POST /api/posts/:id/like` / `DELETE /api/posts/:id/like` → like or unlike a post
+- `POST /api/posts/:id/repost` / `DELETE /api/posts/:id/repost` → repost or unrepost a post
 
 ## Checks
 

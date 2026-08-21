@@ -28,16 +28,46 @@ export interface Author {
   displayName: string;
 }
 
+export interface OriginalPost {
+  id: string;
+  text: string;
+  replyToId: string | null;
+  repostOfId: string | null;
+  createdAt: string;
+  author: Author;
+}
+
 export interface Post {
   id: string;
   text: string;
+  replyToId: string | null;
+  repostOfId: string | null;
   createdAt: string;
   author: Author;
+  likeCount: number;
+  liked: boolean;
+  reposted: boolean;
+  repostOf: OriginalPost | null;
 }
 
 export interface Timeline {
   posts: Post[];
   nextCursor: string | null;
+}
+
+export interface PostDetail {
+  post: Post;
+  replies: Post[];
+}
+
+export interface LikeState {
+  liked: boolean;
+  likeCount: number;
+}
+
+export interface RepostState {
+  reposted: boolean;
+  post?: Post;
 }
 
 function userPath(handle: string) {
@@ -80,6 +110,21 @@ export const api = {
   logout: () => request<void>('/api/auth/logout', { method: 'POST' }),
   createPost: (text: string) =>
     request<Post>('/api/posts', { method: 'POST', body: JSON.stringify({ text }) }),
+  postDetail: (id: string) =>
+    request<PostDetail>(`/api/posts/${encodeURIComponent(id)}`),
+  reply: (id: string, text: string) =>
+    request<Post>(`/api/posts/${encodeURIComponent(id)}/reply`, {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    }),
+  like: (id: string) =>
+    request<LikeState>(`/api/posts/${encodeURIComponent(id)}/like`, { method: 'POST' }),
+  unlike: (id: string) =>
+    request<LikeState>(`/api/posts/${encodeURIComponent(id)}/like`, { method: 'DELETE' }),
+  repost: (id: string) =>
+    request<RepostState>(`/api/posts/${encodeURIComponent(id)}/repost`, { method: 'POST' }),
+  unrepost: (id: string) =>
+    request<RepostState>(`/api/posts/${encodeURIComponent(id)}/repost`, { method: 'DELETE' }),
   timeline: (cursor?: string) =>
     request<Timeline>(`/api/timeline${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`),
   profile: (handle: string) => request<Profile>(userPath(handle)),

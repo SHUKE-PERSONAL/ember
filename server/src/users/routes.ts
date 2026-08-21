@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { prisma } from '../db.js';
 import { requireAuth } from '../auth/requireAuth.js';
 import { asyncHandler } from '../util/asyncHandler.js';
-import { postShape } from '../posts/routes.js';
+import { postSelect, serializePost } from '../posts/routes.js';
 
 export const usersRouter = Router();
 
@@ -82,10 +82,10 @@ usersRouter.get('/users/:handle/posts', asyncHandler(async (req: Request, res: R
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     take: limit + 1,
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-    select: postShape,
+    select: postSelect(req.session.userId!),
   });
 
-  const posts = rows.slice(0, limit);
+  const posts = rows.slice(0, limit).map(serializePost);
   const nextCursor = rows.length > limit ? posts[posts.length - 1].id : null;
   return res.json({ posts, nextCursor });
 }));
