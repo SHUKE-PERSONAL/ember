@@ -11,6 +11,17 @@ export interface User {
   createdAt: string;
 }
 
+export interface Profile {
+  id: string;
+  handle: string;
+  displayName: string;
+  bio: string | null;
+  createdAt: string;
+  followerCount: number;
+  followingCount: number;
+  isFollowing: boolean;
+}
+
 export interface Author {
   id: string;
   handle: string;
@@ -27,6 +38,10 @@ export interface Post {
 export interface Timeline {
   posts: Post[];
   nextCursor: string | null;
+}
+
+function userPath(handle: string) {
+  return `/api/users/${encodeURIComponent(handle)}`;
 }
 
 export class ApiError extends Error {
@@ -67,4 +82,11 @@ export const api = {
     request<Post>('/api/posts', { method: 'POST', body: JSON.stringify({ text }) }),
   timeline: (cursor?: string) =>
     request<Timeline>(`/api/timeline${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`),
+  profile: (handle: string) => request<Profile>(userPath(handle)),
+  profilePosts: (handle: string, cursor?: string) =>
+    request<Timeline>(`${userPath(handle)}/posts${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`),
+  follow: (handle: string) =>
+    request<Profile>(`${userPath(handle)}/follow`, { method: 'POST' }),
+  unfollow: (handle: string) =>
+    request<Profile>(`${userPath(handle)}/follow`, { method: 'DELETE' }),
 };

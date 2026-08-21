@@ -15,7 +15,7 @@ const MAX_LIMIT = 50;
 
 // Shape returned for a timeline/created post. Full text is always returned —
 // the 140-grapheme fold is a display concern (#3).
-const postShape = {
+export const postShape = {
   id: true,
   text: true,
   createdAt: true,

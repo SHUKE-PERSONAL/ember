@@ -111,6 +111,9 @@ curl --fail --silent https://bbs.shukelabs.com/api/health
 ## Endpoints
 
 - `GET /api/health` → `{ "status": "ok" }`
+- `GET /api/users/:handle` → public profile, follower/following counts, and viewer follow state
+- `GET /api/users/:handle/posts` → cursor-paginated posts authored by that user
+- `POST /api/users/:handle/follow` / `DELETE /api/users/:handle/follow` → follow or unfollow a user
 
 ## Checks
 
