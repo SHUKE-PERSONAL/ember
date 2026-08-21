@@ -81,6 +81,37 @@ function parsePostText(req: Request, res: Response) {
   return text;
 }
 
+function postingCooldownSeconds() {
+  const raw = process.env.POST_COOLDOWN_SECONDS?.trim();
+  if (!raw) return 0;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.trunc(parsed) : 0;
+}
+
+async function assertPostingAllowed(req: Request, res: Response) {
+  const user = await prisma.user.findUnique({
+    where: { id: req.session.userId! },
+    select: { emailVerifiedAt: true },
+  });
+  if (!user) {
+    res.status(401).json({ error: 'not authenticated' });
+    return false;
+  }
+  if (!user.emailVerifiedAt) {
+    res.status(403).json({ error: 'email not verified' });
+    return false;
+  }
+
+  const cooldown = postingCooldownSeconds();
+  const elapsed = Math.max(0, Math.floor((Date.now() - user.emailVerifiedAt.getTime()) / 1000));
+  const retryAfterSeconds = Math.max(0, cooldown - elapsed);
+  if (retryAfterSeconds > 0) {
+    res.status(403).json({ error: 'posting cooldown', retryAfterSeconds });
+    return false;
+  }
+  return true;
+}
+
 function parseLimit(req: Request) {
   const rawLimit = Number(req.query.limit);
   return Number.isFinite(rawLimit)
@@ -105,6 +136,7 @@ function paginateRows<T extends { id: string }>(rows: T[], cursor: string | unde
 }
 
 postsRouter.post('/posts', asyncHandler(async (req: Request, res: Response) => {
+  if (!(await assertPostingAllowed(req, res))) return;
   const text = parsePostText(req, res);
   if (text === null) return;
 
@@ -186,6 +218,7 @@ postsRouter.get('/posts/:id', asyncHandler(async (req: Request, res: Response) =
 }));
 
 postsRouter.post('/posts/:id/reply', asyncHandler(async (req: Request, res: Response) => {
+  if (!(await assertPostingAllowed(req, res))) return;
   const text = parsePostText(req, res);
   if (text === null) return;
 
@@ -243,6 +276,7 @@ postsRouter.delete('/posts/:id/like', asyncHandler(async (req: Request, res: Res
 }));
 
 postsRouter.post('/posts/:id/repost', asyncHandler(async (req: Request, res: Response) => {
+  if (!(await assertPostingAllowed(req, res))) return;
   const original = await prisma.post.findUnique({
     where: { id: req.params.id },
     select: { id: true },

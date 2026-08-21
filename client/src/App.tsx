@@ -1,4 +1,5 @@
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { api, ApiError } from './api';
 import { AuthGate } from './components/AuthGate';
 import { Compose } from './components/Compose';
 import { Profile } from './components/Profile';
@@ -11,6 +12,12 @@ import { WelcomeScreen } from './components/WelcomeScreen';
 import './styles.css';
 
 export default function App() {
+  const activationToken = getActivationToken(window.location);
+  if (activationToken !== null) return <ActivationPage token={activationToken} />;
+  return <AuthenticatedApp />;
+}
+
+function AuthenticatedApp() {
   const timeline = useRef<TimelineHandle>(null);
   const profileHandle = getProfileHandle(window.location.pathname);
   const postId = getPostId(window.location.pathname);
@@ -46,13 +53,68 @@ export default function App() {
                 </button>
               </div>
             </header>
-            <Compose onPosted={(post) => timeline.current?.prepend(post)} />
+            <Compose user={user} onPosted={(post) => timeline.current?.prepend(post)} />
             <Timeline ref={timeline} />
           </main>
         )
       )}
     </AuthGate>
   );
+}
+
+function ActivationPage({ token }: { token: string }) {
+  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [error, setError] = useState<string | null>(null);
+  const [continueToApp, setContinueToApp] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    api.activate(token)
+      .then(() => {
+        if (mounted) setStatus('success');
+      })
+      .catch((err) => {
+        if (!mounted) return;
+        setError(err instanceof ApiError ? err.message : 'could not activate your email');
+        setStatus('error');
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [token]);
+
+  if (continueToApp) return <AuthenticatedApp />;
+  return (
+    <main className="auth">
+      {status === 'loading' && <p>Activating your email…</p>}
+      {status === 'success' && (
+        <>
+          <h2>Email verified</h2>
+          <p>Your Ember account is ready.</p>
+          <button
+            type="button"
+            onClick={() => {
+              window.history.replaceState({}, '', '/');
+              setContinueToApp(true);
+            }}
+          >
+            Continue to Ember
+          </button>
+        </>
+      )}
+      {status === 'error' && (
+        <>
+          <h2>Activation failed</h2>
+          <p className="error">{error}</p>
+        </>
+      )}
+    </main>
+  );
+}
+
+function getActivationToken(location: Location) {
+  if (!/^\/activate\/?$/.test(location.pathname)) return null;
+  return new URLSearchParams(location.search).get('token') ?? '';
 }
 
 function getPostId(pathname: string) {

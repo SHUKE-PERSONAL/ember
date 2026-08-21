@@ -34,6 +34,21 @@ npm run dev
 The Vite dev server proxies `/api/*` to Express, so the browser uses a single
 origin.
 
+### Environment
+
+Local server settings are in `server/.env` (copy `server/.env.example`).
+Production uses the repository-root `.env.production` loaded by
+`docker-compose.production.yml` (copy `.env.production.example`). In addition
+to the database, session, and message-encryption settings, configure:
+
+- `RESEND_API_KEY` — optional locally; when absent, activation links are logged
+  by the server instead of sent.
+- `MAIL_FROM` — sender address, defaulting to `noreply@mail.shukelabs.com`.
+- `APP_URL` — client origin used in activation links, defaulting to
+  `http://localhost:5173` locally and `https://bbs.shukelabs.com` in production.
+- `POST_COOLDOWN_SECONDS` — live per-request cooldown after activation; defaults
+  to `0`, and invalid values safely fall back to `0`.
+
 ## Production
 
 Build the client and server, then run only the compiled Express server:
@@ -61,7 +76,8 @@ One-time host setup:
    `/var/www/ember`.
 2. Copy `.env.production.example` to `/var/www/ember/.env.production` and set
    unique URL-safe values (for example, `openssl rand -hex 32`) for
-   `POSTGRES_PASSWORD`, `SESSION_SECRET`, and `MESSAGE_ENCRYPTION_KEY`, using
+   `POSTGRES_PASSWORD`, `SESSION_SECRET`, `MESSAGE_ENCRYPTION_KEY`, and
+   `RESEND_API_KEY`, using
    the same password in
    `DATABASE_URL`. Keep
    `DATABASE_URL` pointed at the Compose service name `postgres`; this file is
@@ -104,23 +120,29 @@ Verify the public edge after the first deployment:
 
 ```bash
 curl --fail --silent https://bbs.shukelabs.com/api/health
-# Open https://bbs.shukelabs.com, register, compose a post, and confirm it is
-# visible on the timeline. Restart the app on sydney2 and confirm the same post
-# is still visible after the check.
+# Open https://bbs.shukelabs.com, register, activate the email link, compose a
+# post, and confirm it is visible on the timeline. Restart the app on sydney2
+# and confirm the same post is still visible after the check.
 ```
 
 ## Endpoints
 
 - `GET /api/health` → `{ "status": "ok" }`
+- `POST /api/auth/register` → create and auto-login an account, then send an activation email
+- `POST /api/auth/login` → authenticate by email or handle
+- `POST /api/auth/activate` → activate an account with `{ "token": "..." }`
+- `POST /api/auth/resend-activation` → resend the authenticated user's activation email
+- `GET /api/me` → the authenticated user's account, including `emailVerifiedAt`
 - `GET /api/users/:handle` → public profile, follower/following counts, and viewer follow state
 - `GET /api/users/:handle/posts` → cursor-paginated posts authored by that user
 - `POST /api/users/:handle/follow` / `DELETE /api/users/:handle/follow` → follow or unfollow a user
 - `GET /api/topics/:tag/posts` → cursor-paginated posts containing a topic tag, newest first
 - `GET /api/search?q=` → matching posts and users for a search query
 - `GET /api/posts/:id` → a post and its direct replies
-- `POST /api/posts/:id/reply` → create a reply
+- `POST /api/posts` → create a post (requires email activation and observes the posting cooldown)
+- `POST /api/posts/:id/reply` → create a reply (requires email activation and observes the posting cooldown)
 - `POST /api/posts/:id/like` / `DELETE /api/posts/:id/like` → like or unlike a post
-- `POST /api/posts/:id/repost` / `DELETE /api/posts/:id/repost` → repost or unrepost a post
+- `POST /api/posts/:id/repost` / `DELETE /api/posts/:id/repost` → repost or unrepost a post; creating a repost requires email activation and observes the posting cooldown
 - `GET /api/messages` → conversation summaries with participant, last-message metadata, and unread count
 - `GET /api/messages/:handle` → the authenticated user's decrypted thread with another user
 - `POST /api/messages/:handle` → send an encrypted message to another user by handle (`{ "text": "..." }`)

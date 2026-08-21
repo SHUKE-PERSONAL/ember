@@ -17,7 +17,10 @@ export function PostDetail({
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [resendBusy, setResendBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
+  const [cooldownSeconds, setCooldownSeconds] = useState<number | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -50,14 +53,36 @@ export function PostDetail({
     if (!canReply) return;
     setBusy(true);
     setError(null);
+    setCooldownSeconds(null);
     try {
       const reply = await api.reply(id, text);
       setReplies((current) => [...current, reply]);
       setText('');
     } catch (err) {
+      if (err instanceof ApiError && err.status === 403) {
+        const retryAfterSeconds = getRetryAfterSeconds(err.body);
+        if (retryAfterSeconds !== null) {
+          setCooldownSeconds(retryAfterSeconds);
+          return;
+        }
+      }
       setError(err instanceof ApiError ? err.message : 'could not reply');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const resendActivation = async () => {
+    setResendBusy(true);
+    setError(null);
+    setResendMessage(null);
+    try {
+      await api.resendActivation();
+      setResendMessage('Activation email sent.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'could not resend activation email');
+    } finally {
+      setResendBusy(false);
     }
   };
 
@@ -83,20 +108,33 @@ export function PostDetail({
           <section aria-label="Post detail">
             <PostItem post={post} fullText />
           </section>
-          <form className="reply-compose" onSubmit={submitReply}>
-            <textarea
-              placeholder="Write a reply…"
-              value={text}
-              onChange={(event) => setText(event.target.value)}
-              rows={3}
-            />
-            <div className="compose-actions">
-              <span className={`counter${overCeiling ? ' over' : overSoft ? ' soft' : ''}`}>
-                {count}{overSoft ? ` / ${SOFT_LIMIT}` : ''}
-              </span>
-              <button type="submit" disabled={!canReply}>Reply</button>
-            </div>
-          </form>
+          {!user.emailVerifiedAt ? (
+            <section className="reply-compose compose-notice">
+              <p>Verify your email before replying.</p>
+              {resendMessage && <p className="muted">{resendMessage}</p>}
+              <button type="button" onClick={resendActivation} disabled={resendBusy}>
+                Resend activation email
+              </button>
+            </section>
+          ) : (
+            <form className="reply-compose" onSubmit={submitReply}>
+              <textarea
+                placeholder="Write a reply…"
+                value={text}
+                onChange={(event) => setText(event.target.value)}
+                rows={3}
+              />
+              {cooldownSeconds !== null && (
+                <p className="error">Posting cooldown: try again in {cooldownSeconds} seconds.</p>
+              )}
+              <div className="compose-actions">
+                <span className={`counter${overCeiling ? ' over' : overSoft ? ' soft' : ''}`}>
+                  {count}{overSoft ? ` / ${SOFT_LIMIT}` : ''}
+                </span>
+                <button type="submit" disabled={!canReply}>Reply</button>
+              </div>
+            </form>
+          )}
           {error && <p className="error">{error}</p>}
           <section aria-label="Replies">
             <h2 className="section-title">Replies</h2>
@@ -107,4 +145,10 @@ export function PostDetail({
       )}
     </main>
   );
+}
+
+function getRetryAfterSeconds(body: unknown) {
+  if (typeof body !== 'object' || body === null) return null;
+  const value = (body as { retryAfterSeconds?: unknown }).retryAfterSeconds;
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }

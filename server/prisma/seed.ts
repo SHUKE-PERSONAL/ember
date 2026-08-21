@@ -13,12 +13,13 @@ async function main() {
   ];
 
   const users = [];
+  const verifiedAt = new Date();
   for (const u of usersData) {
     users.push(
       await prisma.user.upsert({
         where: { email: u.email },
-        update: {},
-        create: { ...u, passwordHash: password },
+        update: { emailVerifiedAt: verifiedAt },
+        create: { ...u, passwordHash: password, emailVerifiedAt: verifiedAt },
       }),
     );
   }

@@ -8,6 +8,7 @@ export interface User {
   displayName: string;
   email: string;
   bio: string | null;
+  emailVerifiedAt: string | null;
   createdAt: string;
 }
 
@@ -109,7 +110,7 @@ function userPath(handle: string) {
 }
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(public status: number, message: string, public body?: unknown) {
     super(message);
     this.name = 'ApiError';
   }
@@ -123,13 +124,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     let message = res.statusText;
+    let body: { error?: unknown; [key: string]: unknown } | undefined;
     try {
-      const body = await res.json();
-      if (body?.error) message = body.error;
+      body = await res.json();
+      if (typeof body?.error === 'string') message = body.error;
     } catch {
       // non-JSON error body — keep statusText
     }
-    throw new ApiError(res.status, message);
+    throw new ApiError(res.status, message, body);
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
@@ -139,6 +141,10 @@ export const api = {
   me: () => request<User>('/api/me'),
   register: (body: { handle: string; displayName?: string; email: string; password: string }) =>
     request<User>('/api/auth/register', { method: 'POST', body: JSON.stringify(body) }),
+  activate: (token: string) =>
+    request<User>('/api/auth/activate', { method: 'POST', body: JSON.stringify({ token }) }),
+  resendActivation: () =>
+    request<User>('/api/auth/resend-activation', { method: 'POST' }),
   login: (body: { identifier: string; password: string }) =>
     request<User>('/api/auth/login', { method: 'POST', body: JSON.stringify(body) }),
   logout: () => request<void>('/api/auth/logout', { method: 'POST' }),

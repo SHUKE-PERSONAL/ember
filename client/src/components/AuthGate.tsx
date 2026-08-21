@@ -15,6 +15,7 @@ export function AuthGate({
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAuth, setShowAuth] = useState(false);
+  const [activationPending, setActivationPending] = useState(false);
 
   useEffect(() => {
     api.me()
@@ -25,7 +26,20 @@ export function AuthGate({
 
   if (loading) return <p className="muted">Loading…</p>;
   if (!user) {
-    if (showAuth || !unauthenticated) return <AuthForm onAuthed={setUser} />;
+    if (showAuth || !unauthenticated) {
+      return (
+        <AuthForm
+          onAuthed={(authenticated) => {
+            setActivationPending(false);
+            setUser(authenticated);
+          }}
+          onRegistered={(registered) => {
+            setActivationPending(!registered.emailVerifiedAt);
+            setUser(registered);
+          }}
+        />
+      );
+    }
     return unauthenticated(() => setShowAuth(true));
   }
 
@@ -33,12 +47,57 @@ export function AuthGate({
     api.logout().finally(() => {
       setUser(null);
       setShowAuth(false);
+      setActivationPending(false);
     });
   };
+  if (activationPending && !user.emailVerifiedAt) {
+    return <ActivationPending user={user} logout={logout} />;
+  }
   return <>{children(user, logout)}</>;
 }
 
-export function AuthForm({ onAuthed }: { onAuthed: (u: User) => void }) {
+function ActivationPending({ user, logout }: { user: User; logout: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const resend = async () => {
+    setBusy(true);
+    setMessage(null);
+    setError(null);
+    try {
+      await api.resendActivation();
+      setMessage('Activation email sent.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'could not resend activation email');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <main className="auth">
+      <h2>Check your email</h2>
+      <p>We sent an activation link to {user.email}.</p>
+      {message && <p className="muted">{message}</p>}
+      {error && <p className="error">{error}</p>}
+      <button type="button" onClick={resend} disabled={busy}>
+        Resend activation email
+      </button>
+      <button type="button" className="link" onClick={logout}>
+        Log out
+      </button>
+    </main>
+  );
+}
+
+export function AuthForm({
+  onAuthed,
+  onRegistered,
+}: {
+  onAuthed: (u: User) => void;
+  onRegistered?: (u: User) => void;
+}) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [handle, setHandle] = useState('');
   const [identifier, setIdentifier] = useState('');
@@ -56,7 +115,8 @@ export function AuthForm({ onAuthed }: { onAuthed: (u: User) => void }) {
         mode === 'login'
           ? await api.login({ identifier, password })
           : await api.register({ handle, email, password });
-      onAuthed(user);
+      if (mode === 'register' && onRegistered) onRegistered(user);
+      else onAuthed(user);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'something went wrong');
     } finally {

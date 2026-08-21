@@ -15,20 +15,33 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  handle       String   @unique
-  displayName  String
-  email        String   @unique
-  passwordHash String
-  bio          String?
-  createdAt    DateTime @default(now())
+  id              String    @id @default(cuid())
+  handle          String    @unique
+  displayName     String
+  email           String    @unique
+  passwordHash    String
+  bio             String?
+  emailVerifiedAt DateTime?
+  createdAt       DateTime  @default(now())
 
-  posts     Post[]
-  following Follow[] @relation("follower")
-  followers Follow[] @relation("following")
-  likes     Like[]
-  sentMessages     Message[] @relation("sentMessages")
-  receivedMessages Message[] @relation("receivedMessages")
+  posts              Post[]
+  following          Follow[]            @relation("follower")
+  followers          Follow[]            @relation("following")
+  likes              Like[]
+  emailVerifications EmailVerification[]
+  sentMessages       Message[]           @relation("sentMessages")
+  receivedMessages   Message[]           @relation("receivedMessages")
+}
+
+model EmailVerification {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model Post {
@@ -75,15 +88,15 @@ model Like {
 }
 
 model Message {
-  id            String   @id @default(cuid())
-  sender        User     @relation("sentMessages", fields: [senderId], references: [id])
+  id            String    @id @default(cuid())
+  sender        User      @relation("sentMessages", fields: [senderId], references: [id])
   senderId      String
-  recipient     User     @relation("receivedMessages", fields: [recipientId], references: [id])
+  recipient     User      @relation("receivedMessages", fields: [recipientId], references: [id])
   recipientId   String
   encryptedBody String
   nonce         String
   readAt        DateTime?
-  createdAt     DateTime @default(now())
+  createdAt     DateTime  @default(now())
 
   @@index([senderId])
   @@index([recipientId])

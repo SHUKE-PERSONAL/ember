@@ -13,6 +13,7 @@ const user: User = {
   displayName: 'Viewer',
   email: 'viewer@example.com',
   bio: null,
+  emailVerifiedAt: '2026-01-01T00:00:00.000Z',
   createdAt: '2026-01-01T00:00:00.000Z',
 };
 
