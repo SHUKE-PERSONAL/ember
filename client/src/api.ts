@@ -74,6 +74,36 @@ export interface RepostState {
   post?: Post;
 }
 
+export interface Message {
+  id: string;
+  sender: Author;
+  recipient: Author;
+  text: string;
+  createdAt: string;
+  readAt: string | null;
+}
+
+export interface MessageConversation {
+  participant: Author;
+  lastMessage: {
+    id: string;
+    senderId: string;
+    recipientId: string;
+    createdAt: string;
+    readAt: string | null;
+  };
+  unreadCount: number;
+}
+
+export interface MessageList {
+  conversations: MessageConversation[];
+}
+
+export interface MessageThread {
+  participant: Author;
+  messages: Message[];
+}
+
 function userPath(handle: string) {
   return `/api/users/${encodeURIComponent(handle)}`;
 }
@@ -145,4 +175,12 @@ export const api = {
     request<Profile>(`${userPath(handle)}/follow`, { method: 'POST' }),
   unfollow: (handle: string) =>
     request<Profile>(`${userPath(handle)}/follow`, { method: 'DELETE' }),
+  messages: () => request<MessageList>('/api/messages'),
+  messageThread: (handle: string) =>
+    request<MessageThread>(`/api/messages/${encodeURIComponent(handle)}`),
+  sendMessage: (handle: string, text: string) =>
+    request<Message>(`/api/messages/${encodeURIComponent(handle)}`, {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    }),
 };

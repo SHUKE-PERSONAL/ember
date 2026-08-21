@@ -100,9 +100,14 @@ export function Profile({
             <p className="muted">@{profile.handle}</p>
           </div>
           {!ownProfile && (
-            <button type="button" onClick={toggleFollow} disabled={followBusy}>
-              {followBusy ? 'Updating…' : profile.isFollowing ? 'Following' : 'Follow'}
-            </button>
+            <div className="profile-actions">
+              <a className="button-link" href={`/messages/${encodeURIComponent(profile.handle)}`}>
+                Message
+              </a>
+              <button type="button" onClick={toggleFollow} disabled={followBusy}>
+                {followBusy ? 'Updating…' : profile.isFollowing ? 'Following' : 'Follow'}
+              </button>
+            </div>
           )}
         </div>
         {profile.bio && <p className="profile-bio">{profile.bio}</p>}

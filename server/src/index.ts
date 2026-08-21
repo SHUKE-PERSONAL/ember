@@ -3,6 +3,8 @@ import { argv } from 'node:process';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import session from 'express-session';
 import { authRouter } from './auth/routes.js';
+import { assertMessageEncryptionKey } from './messages/crypto.js';
+import { messagesRouter } from './messages/routes.js';
 import { postsRouter } from './posts/routes.js';
 import { usersRouter } from './users/routes.js';
 
@@ -24,6 +26,7 @@ export function createApp() {
   if (!SESSION_SECRET) {
     throw new Error('SESSION_SECRET is not set — copy server/.env.example to server/.env');
   }
+  assertMessageEncryptionKey();
 
   app.use(
     session({
@@ -44,6 +47,7 @@ export function createApp() {
   });
 
   app.use('/api', authRouter);
+  app.use('/api', messagesRouter);
   app.use('/api', usersRouter);
   app.use('/api', postsRouter);
 

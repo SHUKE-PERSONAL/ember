@@ -61,7 +61,8 @@ One-time host setup:
    `/var/www/ember`.
 2. Copy `.env.production.example` to `/var/www/ember/.env.production` and set
    unique URL-safe values (for example, `openssl rand -hex 32`) for
-   `POSTGRES_PASSWORD` and `SESSION_SECRET`, using the same password in
+   `POSTGRES_PASSWORD`, `SESSION_SECRET`, and `MESSAGE_ENCRYPTION_KEY`, using
+   the same password in
    `DATABASE_URL`. Keep
    `DATABASE_URL` pointed at the Compose service name `postgres`; this file is
    host-only, should be mode `600`, and is preserved by deployments.
@@ -120,6 +121,9 @@ curl --fail --silent https://bbs.shukelabs.com/api/health
 - `POST /api/posts/:id/reply` → create a reply
 - `POST /api/posts/:id/like` / `DELETE /api/posts/:id/like` → like or unlike a post
 - `POST /api/posts/:id/repost` / `DELETE /api/posts/:id/repost` → repost or unrepost a post
+- `GET /api/messages` → conversation summaries with participant, last-message metadata, and unread count
+- `GET /api/messages/:handle` → the authenticated user's decrypted thread with another user
+- `POST /api/messages/:handle` → send an encrypted message to another user by handle (`{ "text": "..." }`)
 
 ## Checks
 

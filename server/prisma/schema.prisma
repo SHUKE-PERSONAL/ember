@@ -27,6 +27,8 @@ model User {
   following Follow[] @relation("follower")
   followers Follow[] @relation("following")
   likes     Like[]
+  sentMessages     Message[] @relation("sentMessages")
+  receivedMessages Message[] @relation("receivedMessages")
 }
 
 model Post {
@@ -70,4 +72,21 @@ model Like {
   createdAt DateTime @default(now())
 
   @@id([userId, postId])
+}
+
+model Message {
+  id            String   @id @default(cuid())
+  sender        User     @relation("sentMessages", fields: [senderId], references: [id])
+  senderId      String
+  recipient     User     @relation("receivedMessages", fields: [recipientId], references: [id])
+  recipientId   String
+  encryptedBody String
+  nonce         String
+  readAt        DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([senderId])
+  @@index([recipientId])
+  @@index([createdAt])
+  @@index([recipientId, readAt])
 }
