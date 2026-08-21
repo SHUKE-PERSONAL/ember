@@ -140,9 +140,9 @@ curl --fail --silent https://bbs.shukelabs.com/api/health
 - `GET /api/search?q=` → matching posts and users for a search query
 - `GET /api/posts/:id` → a post and its direct replies
 - `POST /api/posts` → create a post (requires email activation and observes the posting cooldown)
-- `POST /api/posts/:id/reply` → create a reply
+- `POST /api/posts/:id/reply` → create a reply (requires email activation and observes the posting cooldown)
 - `POST /api/posts/:id/like` / `DELETE /api/posts/:id/like` → like or unlike a post
-- `POST /api/posts/:id/repost` / `DELETE /api/posts/:id/repost` → repost or unrepost a post
+- `POST /api/posts/:id/repost` / `DELETE /api/posts/:id/repost` → repost or unrepost a post; creating a repost requires email activation and observes the posting cooldown
 - `GET /api/messages` → conversation summaries with participant, last-message metadata, and unread count
 - `GET /api/messages/:handle` → the authenticated user's decrypted thread with another user
 - `POST /api/messages/:handle` → send an encrypted message to another user by handle (`{ "text": "..." }`)

@@ -106,6 +106,19 @@ describe('email activation', () => {
     const reused = await agent.post('/api/auth/activate').send({ token });
     expect(reused.status).toBe(400);
     expect(reused.body).toEqual({ error: 'invalid or expired activation token' });
+
+    const log = vi.spyOn(console, 'info').mockImplementation(() => {});
+    try {
+      const resend = await agent.post('/api/auth/resend-activation');
+      expect(resend.status).toBe(200);
+      expect(resend.body).toMatchObject({
+        handle: 'activation-user',
+        emailVerifiedAt: activation.body.emailVerifiedAt,
+      });
+      expect(log).not.toHaveBeenCalled();
+    } finally {
+      log.mockRestore();
+    }
   });
 
   it('rejects invalid and expired tokens with a clear error', async () => {
