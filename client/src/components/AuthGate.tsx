@@ -38,9 +38,10 @@ export function AuthGate({
   return <>{children(user, logout)}</>;
 }
 
-function AuthForm({ onAuthed }: { onAuthed: (u: User) => void }) {
+export function AuthForm({ onAuthed }: { onAuthed: (u: User) => void }) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [handle, setHandle] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +54,7 @@ function AuthForm({ onAuthed }: { onAuthed: (u: User) => void }) {
     try {
       const user =
         mode === 'login'
-          ? await api.login({ email, password })
+          ? await api.login({ identifier, password })
           : await api.register({ handle, email, password });
       onAuthed(user);
     } catch (err) {
@@ -75,11 +76,13 @@ function AuthForm({ onAuthed }: { onAuthed: (u: User) => void }) {
         />
       )}
       <input
-        placeholder="email"
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        autoComplete="email"
+        placeholder={mode === 'login' ? 'email or handle' : 'email'}
+        type={mode === 'login' ? 'text' : 'email'}
+        value={mode === 'login' ? identifier : email}
+        onChange={(e) =>
+          mode === 'login' ? setIdentifier(e.target.value) : setEmail(e.target.value)
+        }
+        autoComplete={mode === 'login' ? 'username' : 'email'}
       />
       <input
         placeholder="password"
