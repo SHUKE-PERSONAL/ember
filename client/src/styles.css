@@ -189,7 +189,7 @@ button.more {
   padding: 0.75rem;
   background: #0000aa;
   color: #aaa;
-  font: 0.95rem/1.35 "Courier New", ui-monospace, monospace;
+  font: 0.95rem/1.35 Consolas, "DejaVu Sans Mono", "Cascadia Mono", Menlo, "Courier New", ui-monospace, monospace;
   white-space: pre;
 }
 
@@ -245,20 +245,6 @@ button.more {
   padding: 4rem 1rem;
   text-align: center;
   font-family: ui-monospace, monospace;
-}
-
-.bbs-enter {
-  display: block;
-  margin: 1rem auto 0;
-  border-color: #00aa00;
-  border-radius: 0.25rem;
-  background: #005500;
-  color: #fff;
-  font-family: ui-monospace, monospace;
-}
-
-.bbs-enter:disabled {
-  cursor: wait;
 }
 
 .sr-only {
