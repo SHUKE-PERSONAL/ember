@@ -1,7 +1,8 @@
 import { Prisma } from '@prisma/client';
-import { Router, type Request, type Response } from 'express';
+import { Router, type NextFunction, type Request, type Response } from 'express';
 import { prisma } from '../db.js';
 import { asyncHandler } from '../util/asyncHandler.js';
+import { requireApiKey } from '../auth/apiKey.js';
 import { requireAuth } from '../auth/requireAuth.js';
 import { publicAuthor } from '../auth/publicUser.js';
 import { graphemeCount, MAX_GRAPHEMES } from '../util/grapheme.js';
@@ -9,8 +10,13 @@ import { normalizeTopicTag, postHasTopic } from './tokens.js';
 
 export const postsRouter = Router();
 
-// Both routes require a session; the guard runs before every handler here.
-postsRouter.use(requireAuth);
+function requireApiKeyWhenPresented(req: Request, res: Response, next: NextFunction) {
+  if (!req.get('authorization')) {
+    next('route');
+    return;
+  }
+  requireApiKey(req, res, next);
+}
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
@@ -20,6 +26,8 @@ const MAX_LIMIT = 50;
 const originalPostSelect = {
   id: true,
   text: true,
+  source: true,
+  externalId: true,
   replyToId: true,
   repostOfId: true,
   createdAt: true,
@@ -68,7 +76,7 @@ export function serializePost(post: PostRow) {
   };
 }
 
-function parsePostText(req: Request, res: Response) {
+export function parsePostText(req: Request, res: Response) {
   const { text } = req.body ?? {};
   if (typeof text !== 'string' || text.trim().length === 0) {
     res.status(400).json({ error: 'text is required' });
@@ -88,9 +96,9 @@ function postingCooldownSeconds() {
   return Number.isFinite(parsed) && parsed >= 0 ? Math.trunc(parsed) : 0;
 }
 
-async function assertPostingAllowed(req: Request, res: Response) {
+export async function assertPostingAllowed(userId: string, res: Response) {
   const user = await prisma.user.findUnique({
-    where: { id: req.session.userId! },
+    where: { id: userId },
     select: { emailVerifiedAt: true },
   });
   if (!user) {
@@ -111,6 +119,44 @@ async function assertPostingAllowed(req: Request, res: Response) {
   }
   return true;
 }
+
+function parseExternalIdentity(req: Request, res: Response) {
+  const { source, externalId } = req.body ?? {};
+  if (typeof source !== 'string' || source.trim().length === 0) {
+    res.status(400).json({ error: 'source is required' });
+    return null;
+  }
+  if (typeof externalId !== 'string' || externalId.trim().length === 0) {
+    res.status(400).json({ error: 'externalId is required' });
+    return null;
+  }
+  return { source: source.trim(), externalId: externalId.trim() };
+}
+
+postsRouter.post('/posts', requireApiKeyWhenPresented, asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.apiKeyUserId!;
+  if (!(await assertPostingAllowed(userId, res))) return;
+  const text = parsePostText(req, res);
+  if (text === null) return;
+  const externalIdentity = parseExternalIdentity(req, res);
+  if (externalIdentity === null) return;
+
+  try {
+    const post = await prisma.post.create({
+      data: { authorId: userId, text, ...externalIdentity },
+      select: postSelect(userId),
+    });
+    return res.status(201).json(serializePost(post));
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      return res.status(409).json({ error: 'source and externalId already exist' });
+    }
+    throw err;
+  }
+}));
+
+// Session-authenticated routes remain unchanged below the API-key route.
+postsRouter.use(requireAuth);
 
 function parseLimit(req: Request) {
   const rawLimit = Number(req.query.limit);
@@ -136,7 +182,7 @@ function paginateRows<T extends { id: string }>(rows: T[], cursor: string | unde
 }
 
 postsRouter.post('/posts', asyncHandler(async (req: Request, res: Response) => {
-  if (!(await assertPostingAllowed(req, res))) return;
+  if (!(await assertPostingAllowed(req.session.userId!, res))) return;
   const text = parsePostText(req, res);
   if (text === null) return;
 
@@ -218,7 +264,7 @@ postsRouter.get('/posts/:id', asyncHandler(async (req: Request, res: Response) =
 }));
 
 postsRouter.post('/posts/:id/reply', asyncHandler(async (req: Request, res: Response) => {
-  if (!(await assertPostingAllowed(req, res))) return;
+  if (!(await assertPostingAllowed(req.session.userId!, res))) return;
   const text = parsePostText(req, res);
   if (text === null) return;
 
@@ -276,7 +322,7 @@ postsRouter.delete('/posts/:id/like', asyncHandler(async (req: Request, res: Res
 }));
 
 postsRouter.post('/posts/:id/repost', asyncHandler(async (req: Request, res: Response) => {
-  if (!(await assertPostingAllowed(req, res))) return;
+  if (!(await assertPostingAllowed(req.session.userId!, res))) return;
   const original = await prisma.post.findUnique({
     where: { id: req.params.id },
     select: { id: true },

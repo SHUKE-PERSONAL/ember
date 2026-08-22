@@ -41,6 +41,38 @@ describe('POST /api/posts', () => {
     expect(typeof res.body.id).toBe('string');
     expect(typeof res.body.createdAt).toBe('string');
   });
+
+  it('creates and deduplicates an external post with an API key', async () => {
+    const agent = request.agent(app);
+    const register = await registerAndVerify(agent, {
+      handle: 'external-poster',
+      email: 'external-poster@example.com',
+      password: 'correct-horse',
+    });
+    const key = await agent.post('/api/apikeys').send({
+      name: 'external integration',
+      scopes: 'posts:write',
+    });
+    expect(key.status).toBe(201);
+
+    const first = await request(app)
+      .post('/api/posts')
+      .set('Authorization', `Bearer ${key.body.key}`)
+      .send({ text: 'synced note', source: 'happynotes', externalId: '12345' });
+    expect(first.status).toBe(201);
+    expect(first.body).toMatchObject({
+      text: 'synced note',
+      source: 'happynotes',
+      externalId: '12345',
+      author: { id: register.body.id },
+    });
+
+    const duplicate = await request(app)
+      .post('/api/posts')
+      .set('Authorization', `Bearer ${key.body.key}`)
+      .send({ text: 'same note again', source: 'happynotes', externalId: '12345' });
+    expect(duplicate.status).toBe(409);
+  });
 });
 
 describe('email activation posting gate', () => {

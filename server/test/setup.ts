@@ -41,6 +41,7 @@ beforeEach(async () => {
   await prisma.post.deleteMany();
   await prisma.follow.deleteMany();
   await prisma.emailVerification.deleteMany();
+  await prisma.apiKey.deleteMany();
   await prisma.user.deleteMany();
 });
 

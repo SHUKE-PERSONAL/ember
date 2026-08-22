@@ -31,6 +31,22 @@ model User {
   emailVerifications EmailVerification[]
   sentMessages       Message[]           @relation("sentMessages")
   receivedMessages   Message[]           @relation("receivedMessages")
+  apiKeys            ApiKey[]
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  userId     String
+  keyHash    String    @unique
+  name       String
+  scopes     String
+  expiresAt  DateTime?
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
 }
 
 model EmailVerification {
@@ -52,6 +68,8 @@ model Post {
   // anti-abuse ceiling are enforced on the post-create path (#3), not as a
   // column constraint — keeping this column portable.
   text       String
+  source     String?
+  externalId String?
   replyTo    Post?    @relation("replies", fields: [replyToId], references: [id])
   replyToId  String?
   replies    Post[]   @relation("replies")
@@ -65,6 +83,7 @@ model Post {
   // A user can create at most one repost row for an original post. PostgreSQL
   // permits multiple NULLs here, while every repost uses a non-null target.
   @@unique([authorId, repostOfId])
+  @@unique([source, externalId])
 }
 
 model Follow {
