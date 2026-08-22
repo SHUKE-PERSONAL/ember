@@ -133,13 +133,15 @@ curl --fail --silent https://bbs.shukelabs.com/api/health
 - `POST /api/auth/activate` → activate an account with `{ "token": "..." }`
 - `POST /api/auth/resend-activation` → resend the authenticated user's activation email
 - `GET /api/me` → the authenticated user's account, including `emailVerifiedAt`
+- `POST /api/apikeys` → create an API key for the authenticated user; the plaintext `key` is returned once (`{ "name": "HappyNotes sync", "scopes": "posts:write" }`)
+- `GET /api/apikeys` / `DELETE /api/apikeys/:id` → list masked API keys or revoke one
 - `GET /api/users/:handle` → public profile, follower/following counts, and viewer follow state
 - `GET /api/users/:handle/posts` → cursor-paginated posts authored by that user
 - `POST /api/users/:handle/follow` / `DELETE /api/users/:handle/follow` → follow or unfollow a user
 - `GET /api/topics/:tag/posts` → cursor-paginated posts containing a topic tag, newest first
 - `GET /api/search?q=` → matching posts and users for a search query
 - `GET /api/posts/:id` → a post and its direct replies
-- `POST /api/posts` → create a post (requires email activation and observes the posting cooldown)
+- `POST /api/posts` → create a session-authenticated post (requires email activation and observes the posting cooldown), or send `{ "text": "note content", "source": "happynotes", "externalId": "12345" }` with `Authorization: Bearer <key>` for an external integration; the source/externalId pair is idempotent
 - `POST /api/posts/:id/reply` → create a reply (requires email activation and observes the posting cooldown)
 - `POST /api/posts/:id/like` / `DELETE /api/posts/:id/like` → like or unlike a post
 - `POST /api/posts/:id/repost` / `DELETE /api/posts/:id/repost` → repost or unrepost a post; creating a repost requires email activation and observes the posting cooldown

@@ -3,6 +3,7 @@ import { argv } from 'node:process';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import session from 'express-session';
 import { authRouter } from './auth/routes.js';
+import { apiKeysRouter } from './auth/apiKeys.js';
 import { assertMessageEncryptionKey } from './messages/crypto.js';
 import { messagesRouter } from './messages/routes.js';
 import { postsRouter } from './posts/routes.js';
@@ -47,9 +48,12 @@ export function createApp() {
   });
 
   app.use('/api', authRouter);
+  app.use('/api', apiKeysRouter);
+  // postsRouter must run before the other globally session-gated routers so
+  // Bearer-authenticated external posts can reach their API-key guard.
+  app.use('/api', postsRouter);
   app.use('/api', messagesRouter);
   app.use('/api', usersRouter);
-  app.use('/api', postsRouter);
 
   if (process.env.NODE_ENV === 'production') {
     const clientDist = fileURLToPath(new URL('../../client/dist/', import.meta.url));
