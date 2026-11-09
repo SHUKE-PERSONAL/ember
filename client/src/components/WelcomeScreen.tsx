@@ -1,56 +1,8 @@
 import { useEffect, useState } from 'react';
 import ansiAsset from '../assets/SHUKE.ANS?url';
-import { ansiStyleClass, parseAnsiScreen, type AnsiLine } from '../lib/ansi';
+import { ansiStyleClass, isAnsiBoxGlyph, parseAnsiScreen, type AnsiLine } from '../lib/ansi';
 
 export const WELCOME_TRANSITION_DELAY_MS = 1500;
-
-const ANSI_BOX_GLYPHS = new Set([
-  '│',
-  '┤',
-  '╡',
-  '╢',
-  '╖',
-  '╕',
-  '╣',
-  '║',
-  '╗',
-  '╝',
-  '╜',
-  '╛',
-  '┐',
-  '└',
-  '┴',
-  '┬',
-  '├',
-  '─',
-  '┼',
-  '╞',
-  '╟',
-  '╚',
-  '╔',
-  '╩',
-  '╦',
-  '╠',
-  '═',
-  '╬',
-  '╧',
-  '╨',
-  '╤',
-  '╥',
-  '╙',
-  '╘',
-  '╒',
-  '╓',
-  '╫',
-  '╪',
-  '┘',
-  '┌',
-  '█',
-  '▄',
-  '▌',
-  '▐',
-  '▀',
-]);
 
 export function WelcomeScreen({
   onBrowse,
@@ -99,7 +51,7 @@ export function WelcomeScreen({
                   <tr key={lineIndex}>
                     {line.map((cell, cellIndex) => (
                       <td className={ansiStyleClass(cell.style)} key={cellIndex}>
-                        {ANSI_BOX_GLYPHS.has(cell.character) ? '' : cell.character}
+                        {isAnsiBoxGlyph(cell.character) ? '' : cell.character}
                       </td>
                     ))}
                   </tr>
