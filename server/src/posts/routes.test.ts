@@ -85,13 +85,27 @@ describe('anonymous browsing', () => {
     });
     const created = await author.post('/api/posts').send({ text: 'public #anonymous post' });
     expect(created.status).toBe(201);
+    const unrelatedAuthor = request.agent(app);
+    await registerAndVerify(unrelatedAuthor, {
+      handle: 'unrelated-author',
+      email: 'unrelated-author@example.com',
+      password: 'correct-horse',
+    });
+    const unrelatedPost = await unrelatedAuthor.post('/api/posts').send({ text: 'another public post' });
+    expect(unrelatedPost.status).toBe(201);
 
     const anonymous = request(app);
     const timeline = await anonymous.get('/api/timeline');
     expect(timeline.status).toBe(200);
+    expect(timeline.body.posts).toHaveLength(2);
     expect(timeline.body.posts).toEqual(expect.arrayContaining([
       expect.objectContaining({
         id: created.body.id,
+        liked: false,
+        reposted: false,
+      }),
+      expect.objectContaining({
+        id: unrelatedPost.body.id,
         liked: false,
         reposted: false,
       }),
