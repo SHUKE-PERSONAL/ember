@@ -75,4 +75,33 @@ describe('WelcomeScreen', () => {
     container.remove();
   });
 
+  it('offers anonymous browsing alongside auth', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        arrayBuffer: async () => Uint8Array.of(0x48).buffer,
+      }),
+    );
+    const onEnter = vi.fn();
+    const onBrowse = vi.fn();
+    const container = document.createElement('div');
+    document.body.append(container);
+
+    await act(async () => {
+      root = createRoot(container);
+      root.render(<WelcomeScreen onEnter={onEnter} onBrowse={onBrowse} />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const browse = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Browse without an account');
+    expect(browse).not.toBeUndefined();
+    await act(async () => browse?.click());
+    expect(onBrowse).toHaveBeenCalledOnce();
+    container.remove();
+  });
+
 });

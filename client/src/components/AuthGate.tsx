@@ -1,21 +1,58 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from 'react';
 import { api, ApiError, type User } from '../api';
 
-// Minimal session gate. Resolves the current user via /api/me; when absent it
-// renders the combined login / register form by default. Callers may put a
-// public screen in front of that form. The richer profile UI is #4 — this
-// exists only so #3 has a "current user".
+interface AuthContextValue {
+  user: User | null;
+  showAuth: () => void;
+}
+
+const AuthContext = createContext<AuthContextValue | null>(null);
+
+export function AuthProvider({
+  user,
+  showAuth,
+  children,
+}: AuthContextValue & { children: ReactNode }) {
+  return (
+    <AuthContext.Provider value={{ user, showAuth }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (!context) throw new Error('useAuth must be used within AuthGate');
+  return context;
+}
+
+// Resolves the current user via /api/me, keeps the existing auth form and
+// activation flow, and lets callers choose between auth and public browsing.
 export function AuthGate({
   children,
   unauthenticated,
 }: {
-  children: (user: User, logout: () => void) => ReactNode;
-  unauthenticated?: (showAuth: () => void) => ReactNode;
+  children: (user: User | null, logout: () => void) => ReactNode;
+  unauthenticated?: (showAuth: () => void, browse: () => void) => ReactNode;
 }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAuth, setShowAuth] = useState(false);
+  const [browsing, setBrowsing] = useState(false);
   const [activationPending, setActivationPending] = useState(false);
+
+  const openAuth = useCallback(() => setShowAuth(true), []);
+  const browse = useCallback(() => {
+    setShowAuth(false);
+    setBrowsing(true);
+  }, []);
 
   useEffect(() => {
     api.me()
@@ -24,36 +61,43 @@ export function AuthGate({
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <p className="muted">Loading…</p>;
-  if (!user) {
-    if (showAuth || !unauthenticated) {
-      return (
-        <AuthForm
-          onAuthed={(authenticated) => {
-            setActivationPending(false);
-            setUser(authenticated);
-          }}
-          onRegistered={(registered) => {
-            setActivationPending(!registered.emailVerifiedAt);
-            setUser(registered);
-          }}
-        />
-      );
-    }
-    return unauthenticated(() => setShowAuth(true));
-  }
-
-  const logout = () => {
+  const logout = useCallback(() => {
     api.logout().finally(() => {
       setUser(null);
       setShowAuth(false);
+      setBrowsing(false);
       setActivationPending(false);
     });
-  };
-  if (activationPending && !user.emailVerifiedAt) {
+  }, []);
+
+  if (loading) return <p className="muted">Loading…</p>;
+
+  const authForm = (
+    <AuthForm
+      onAuthed={(authenticated) => {
+        setActivationPending(false);
+        setUser(authenticated);
+      }}
+      onRegistered={(registered) => {
+        setActivationPending(!registered.emailVerifiedAt);
+        setUser(registered);
+      }}
+    />
+  );
+
+  if (!user && showAuth) {
+    return authForm;
+  }
+  if (!user && !browsing && unauthenticated) return unauthenticated(openAuth, browse);
+  if (!user && !browsing) return authForm;
+  if (user && activationPending && !user.emailVerifiedAt) {
     return <ActivationPending user={user} logout={logout} />;
   }
-  return <>{children(user, logout)}</>;
+  return (
+    <AuthProvider user={user} showAuth={openAuth}>
+      {children(user, logout)}
+    </AuthProvider>
+  );
 }
 
 function ActivationPending({ user, logout }: { user: User; logout: () => void }) {

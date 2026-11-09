@@ -4,6 +4,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api, type User } from '../api';
+import { AuthProvider } from './AuthGate';
 import { Search } from './Search';
 import { Topic } from './Topic';
 
@@ -31,7 +32,11 @@ describe('topic and search views', () => {
 
     await act(async () => {
       root = createRoot(container);
-      root.render(<Topic tag="ember" user={user} logout={vi.fn()} />);
+      root.render(
+        <AuthProvider user={user} showAuth={vi.fn()}>
+          <Topic tag="ember" user={user} logout={vi.fn()} />
+        </AuthProvider>,
+      );
       await Promise.resolve();
     });
 
@@ -49,7 +54,11 @@ describe('topic and search views', () => {
 
     await act(async () => {
       root = createRoot(container);
-      root.render(<Search query="missing" user={user} logout={vi.fn()} />);
+      root.render(
+        <AuthProvider user={user} showAuth={vi.fn()}>
+          <Search query="missing" user={user} logout={vi.fn()} />
+        </AuthProvider>,
+      );
       await Promise.resolve();
     });
 

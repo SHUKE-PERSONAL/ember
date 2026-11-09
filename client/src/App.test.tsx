@@ -57,4 +57,22 @@ describe('activation route', () => {
     expect(container.textContent).toContain('Activation failed');
     expect(container.textContent).toContain('invalid or expired activation token');
   });
+
+  it('prompts anonymous visitors for auth on the messages route', async () => {
+    window.history.replaceState({}, '', '/messages');
+    vi.spyOn(api, 'me').mockRejectedValue(new Error('not authenticated'));
+    const messages = vi.spyOn(api, 'messages');
+    const container = document.createElement('div');
+
+    await act(async () => {
+      root = createRoot(container);
+      root.render(<App />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('form.auth')).not.toBeNull();
+    expect(container.textContent).toContain('Log in');
+    expect(messages).not.toHaveBeenCalled();
+  });
 });

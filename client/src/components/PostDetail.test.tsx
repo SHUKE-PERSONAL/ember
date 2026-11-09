@@ -4,6 +4,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api, ApiError, type Post, type User } from '../api';
+import { AuthProvider } from './AuthGate';
 import { PostDetail } from './PostDetail';
 
 const post: Post = {
@@ -53,7 +54,11 @@ describe('PostDetail posting notices', () => {
 
     await act(async () => {
       root = createRoot(container);
-      root.render(<PostDetail id="post-id" user={{ ...verifiedUser, emailVerifiedAt: null }} logout={vi.fn()} />);
+      root.render(
+        <AuthProvider user={{ ...verifiedUser, emailVerifiedAt: null }} showAuth={vi.fn()}>
+          <PostDetail id="post-id" user={{ ...verifiedUser, emailVerifiedAt: null }} logout={vi.fn()} />
+        </AuthProvider>,
+      );
       await Promise.resolve();
     });
 
@@ -78,7 +83,11 @@ describe('PostDetail posting notices', () => {
 
     await act(async () => {
       root = createRoot(container);
-      root.render(<PostDetail id="post-id" user={verifiedUser} logout={vi.fn()} />);
+      root.render(
+        <AuthProvider user={verifiedUser} showAuth={vi.fn()}>
+          <PostDetail id="post-id" user={verifiedUser} logout={vi.fn()} />
+        </AuthProvider>,
+      );
       await Promise.resolve();
     });
     const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
@@ -90,5 +99,29 @@ describe('PostDetail posting notices', () => {
     });
 
     expect(container.textContent).toContain('try again in 42 seconds');
+  });
+
+  it('prompts anonymous visitors before replying', async () => {
+    vi.spyOn(api, 'postDetail').mockResolvedValue({ post, replies: [] });
+    const reply = vi.spyOn(api, 'reply');
+    const showAuth = vi.fn();
+    const container = document.createElement('div');
+
+    await act(async () => {
+      root = createRoot(container);
+      root.render(
+        <AuthProvider user={null} showAuth={showAuth}>
+          <PostDetail id="post-id" user={null} logout={vi.fn()} />
+        </AuthProvider>,
+      );
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.reply-compose button')?.click();
+    });
+
+    expect(showAuth).toHaveBeenCalledOnce();
+    expect(reply).not.toHaveBeenCalled();
   });
 });

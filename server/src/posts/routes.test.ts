@@ -75,6 +75,71 @@ describe('POST /api/posts', () => {
   });
 });
 
+describe('anonymous browsing', () => {
+  it('opens public reads with neutral viewer state and keeps writes private', async () => {
+    const author = request.agent(app);
+    await registerAndVerify(author, {
+      handle: 'anonymous-author',
+      email: 'anonymous-author@example.com',
+      password: 'correct-horse',
+    });
+    const created = await author.post('/api/posts').send({ text: 'public #anonymous post' });
+    expect(created.status).toBe(201);
+
+    const anonymous = request(app);
+    const timeline = await anonymous.get('/api/timeline');
+    expect(timeline.status).toBe(200);
+    expect(timeline.body.posts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: created.body.id,
+        liked: false,
+        reposted: false,
+      }),
+    ]));
+
+    const topic = await anonymous.get('/api/topics/anonymous/posts');
+    expect(topic.status).toBe(200);
+    expect(topic.body.posts[0]).toMatchObject({
+      id: created.body.id,
+      liked: false,
+      reposted: false,
+    });
+
+    const search = await anonymous.get('/api/search').query({ q: 'anonymous' });
+    expect(search.status).toBe(200);
+    expect(search.body.posts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: created.body.id, liked: false, reposted: false }),
+    ]));
+
+    const detail = await anonymous.get(`/api/posts/${created.body.id}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body.post).toMatchObject({ liked: false, reposted: false });
+
+    const profile = await anonymous.get('/api/users/anonymous-author');
+    expect(profile.status).toBe(200);
+    expect(profile.body).toMatchObject({ handle: 'anonymous-author', isFollowing: false });
+
+    const profilePosts = await anonymous.get('/api/users/anonymous-author/posts');
+    expect(profilePosts.status).toBe(200);
+    expect(profilePosts.body.posts[0]).toMatchObject({ liked: false, reposted: false });
+
+    const writes = await Promise.all([
+      anonymous.post('/api/posts').send({ text: 'should be private' }),
+      anonymous.post(`/api/posts/${created.body.id}/reply`).send({ text: 'should be private' }),
+      anonymous.post(`/api/posts/${created.body.id}/like`),
+      anonymous.delete(`/api/posts/${created.body.id}/like`),
+      anonymous.post(`/api/posts/${created.body.id}/repost`),
+      anonymous.delete(`/api/posts/${created.body.id}/repost`),
+      anonymous.post('/api/users/anonymous-author/follow'),
+      anonymous.delete('/api/users/anonymous-author/follow'),
+      anonymous.get('/api/messages'),
+      anonymous.get('/api/messages/anonymous-author'),
+      anonymous.post('/api/messages/anonymous-author').send({ text: 'should be private' }),
+    ]);
+    expect(writes.map((response) => response.status)).toEqual(Array(11).fill(401));
+  });
+});
+
 describe('email activation posting gate', () => {
   it('blocks post creation actions while leaving likes and follows available', async () => {
     const unverified = request.agent(app);

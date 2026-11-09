@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError, type Post, type User } from '../api';
 import { graphemeCount, MAX_GRAPHEMES, SOFT_LIMIT } from '../lib/grapheme';
+import { useAuth } from './AuthGate';
 import { PostItem } from './PostItem';
 
 export function PostDetail({
@@ -9,9 +10,10 @@ export function PostDetail({
   logout,
 }: {
   id: string;
-  user: User;
+  user: User | null;
   logout: () => void;
 }) {
+  const { showAuth } = useAuth();
   const [post, setPost] = useState<Post | null>(null);
   const [replies, setReplies] = useState<Post[]>([]);
   const [text, setText] = useState('');
@@ -91,12 +93,18 @@ export function PostDetail({
       <header className="topbar">
         <h1><a href="/" className="brand-link">Ember</a></h1>
         <div className="who">
-          <a className="handle profile-link" href={`/@${encodeURIComponent(user.handle)}`}>
-            @{user.handle}
-          </a>
-          <button type="button" className="link" onClick={logout}>
-            Log out
-          </button>
+          {user ? (
+            <>
+              <a className="handle profile-link" href={`/@${encodeURIComponent(user.handle)}`}>
+                @{user.handle}
+              </a>
+              <button type="button" className="link" onClick={logout}>
+                Log out
+              </button>
+            </>
+          ) : (
+            <button type="button" className="link" onClick={showAuth}>Log in</button>
+          )}
         </div>
       </header>
 
@@ -108,7 +116,12 @@ export function PostDetail({
           <section aria-label="Post detail">
             <PostItem post={post} fullText />
           </section>
-          {!user.emailVerifiedAt ? (
+          {!user ? (
+            <section className="reply-compose compose-notice">
+              <p>Log in to reply.</p>
+              <button type="button" onClick={showAuth}>Log in or register</button>
+            </section>
+          ) : !user.emailVerifiedAt ? (
             <section className="reply-compose compose-notice">
               <p>Verify your email before replying.</p>
               {resendMessage && <p className="muted">{resendMessage}</p>}

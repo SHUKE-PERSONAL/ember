@@ -4,7 +4,13 @@ import { ansiStyleClass, parseAnsiScreen, type AnsiLine } from '../lib/ansi';
 
 export const WELCOME_TRANSITION_DELAY_MS = 1500;
 
-export function WelcomeScreen({ onEnter }: { onEnter: () => void }) {
+export function WelcomeScreen({
+  onEnter,
+  onBrowse,
+}: {
+  onEnter: () => void;
+  onBrowse?: () => void;
+}) {
   const [screen, setScreen] = useState<AnsiLine[] | null>(null);
   const [error, setError] = useState(false);
 
@@ -55,6 +61,14 @@ export function WelcomeScreen({ onEnter }: { onEnter: () => void }) {
         ) : (
           <p className="bbs-status">{error ? 'Welcome screen unavailable.' : 'Loading welcome screen…'}</p>
         )}
+        <div className="bbs-actions">
+          <button type="button" onClick={onEnter}>Log in or register</button>
+          {onBrowse && (
+            <button type="button" className="link" onClick={onBrowse}>
+              Browse without an account
+            </button>
+          )}
+        </div>
       </section>
     </main>
   );

@@ -4,6 +4,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api, type Profile as ProfileData, type User } from '../api';
+import { AuthProvider } from './AuthGate';
 import { Profile } from './Profile';
 
 const user: User = {
@@ -52,7 +53,11 @@ describe('Profile', () => {
 
     await act(async () => {
       root = createRoot(container);
-      root.render(<Profile handle="author" user={user} logout={logout} />);
+      root.render(
+        <AuthProvider user={user} showAuth={vi.fn()}>
+          <Profile handle="author" user={user} logout={logout} />
+        </AuthProvider>,
+      );
       await Promise.resolve();
     });
 
@@ -83,11 +88,42 @@ describe('Profile', () => {
 
     await act(async () => {
       root = createRoot(container);
-      root.render(<Profile handle={user.handle} user={user} logout={vi.fn()} />);
+      root.render(
+        <AuthProvider user={user} showAuth={vi.fn()}>
+          <Profile handle={user.handle} user={user} logout={vi.fn()} />
+        </AuthProvider>,
+      );
       await Promise.resolve();
     });
 
     expect(container.querySelector('button:not(.link)')).toBeNull();
+    container.remove();
+  });
+
+  it('prompts anonymous visitors before following', async () => {
+    vi.spyOn(api, 'profile').mockResolvedValue(profile);
+    vi.spyOn(api, 'profilePosts').mockResolvedValue({ posts: [], nextCursor: null });
+    const follow = vi.spyOn(api, 'follow');
+    const showAuth = vi.fn();
+    const container = document.createElement('div');
+    document.body.append(container);
+
+    await act(async () => {
+      root = createRoot(container);
+      root.render(
+        <AuthProvider user={null} showAuth={showAuth}>
+          <Profile handle="author" user={null} logout={vi.fn()} />
+        </AuthProvider>,
+      );
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button:not(.link)')?.click();
+    });
+
+    expect(showAuth).toHaveBeenCalledOnce();
+    expect(follow).not.toHaveBeenCalled();
     container.remove();
   });
 });

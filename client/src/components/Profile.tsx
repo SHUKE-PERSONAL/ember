@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError, type Post, type Profile as ProfileData, type User } from '../api';
+import { useAuth } from './AuthGate';
 import { PostItem } from './PostItem';
 
 export function Profile({
@@ -8,9 +9,10 @@ export function Profile({
   logout,
 }: {
   handle: string;
-  user: User;
+  user: User | null;
   logout: () => void;
 }) {
+  const { showAuth } = useAuth();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -44,6 +46,10 @@ export function Profile({
   }, [handle]);
 
   const toggleFollow = async () => {
+    if (!user) {
+      showAuth();
+      return;
+    }
     if (!profile || profile.id === user.id) return;
     setFollowBusy(true);
     setError(null);
@@ -77,19 +83,25 @@ export function Profile({
   if (error && !profile) return <p className="error">{error}</p>;
   if (!profile) return <p className="error">user not found</p>;
 
-  const ownProfile = profile.id === user.id;
+  const ownProfile = user !== null && profile.id === user.id;
 
   return (
     <main className="app">
       <header className="topbar">
         <h1><a href="/" className="brand-link">Ember</a></h1>
         <div className="who">
-          <a className="handle profile-link" href={`/@${encodeURIComponent(user.handle)}`}>
-            @{user.handle}
-          </a>
-          <button type="button" className="link" onClick={logout}>
-            Log out
-          </button>
+          {user ? (
+            <>
+              <a className="handle profile-link" href={`/@${encodeURIComponent(user.handle)}`}>
+                @{user.handle}
+              </a>
+              <button type="button" className="link" onClick={logout}>
+                Log out
+              </button>
+            </>
+          ) : (
+            <button type="button" className="link" onClick={showAuth}>Log in</button>
+          )}
         </div>
       </header>
 

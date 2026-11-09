@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { api, ApiError, type Post } from '../api';
 import { foldAt, SOFT_LIMIT } from '../lib/grapheme';
 import { relativeTime } from '../lib/relativeTime';
+import { useAuth } from './AuthGate';
 import { PostText } from './PostText';
 
 // A single timeline post. Text longer than 140 graphemes folds to the first
 // 140 with a 展开 / "Show more" toggle; full text is always present client-side.
 export function PostItem({ post, fullText = false }: { post: Post; fullText?: boolean }) {
+  const { user, showAuth } = useAuth();
   const [expanded, setExpanded] = useState(false);
   const [liked, setLiked] = useState(post.liked);
   const [likeCount, setLikeCount] = useState(post.likeCount);
@@ -18,6 +20,10 @@ export function PostItem({ post, fullText = false }: { post: Post; fullText?: bo
   const showFullText = fullText || expanded;
 
   const toggleLike = async () => {
+    if (!user) {
+      showAuth();
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -32,6 +38,10 @@ export function PostItem({ post, fullText = false }: { post: Post; fullText?: bo
   };
 
   const toggleRepost = async () => {
+    if (!user) {
+      showAuth();
+      return;
+    }
     const targetId = post.repostOfId ?? post.id;
     setBusy(true);
     setError(null);
@@ -90,7 +100,11 @@ export function PostItem({ post, fullText = false }: { post: Post; fullText?: bo
         </p>
       )}
       <footer className="post-actions">
-        <a href={`/posts/${encodeURIComponent(post.id)}`}>Reply</a>
+        {user ? (
+          <a href={`/posts/${encodeURIComponent(post.id)}`}>Reply</a>
+        ) : (
+          <button type="button" className="link" onClick={showAuth}>Reply</button>
+        )}
         <button type="button" className="link" onClick={toggleLike} disabled={busy}>
           {liked ? 'Unlike' : 'Like'} · {likeCount}
         </button>
