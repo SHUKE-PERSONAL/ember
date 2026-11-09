@@ -5,15 +5,12 @@ import { ansiStyleClass, parseAnsiScreen, type AnsiLine } from '../lib/ansi';
 export const WELCOME_TRANSITION_DELAY_MS = 1500;
 
 export function WelcomeScreen({
-  onEnter,
   onBrowse,
 }: {
-  onEnter: () => void;
-  onBrowse?: () => void;
+  onBrowse: () => void;
 }) {
   const [screen, setScreen] = useState<AnsiLine[] | null>(null);
   const [error, setError] = useState(false);
-  const [actionSelected, setActionSelected] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -34,24 +31,11 @@ export function WelcomeScreen({
   }, []);
 
   useEffect(() => {
-    if (!screen || error || actionSelected) return;
+    if (!screen || error) return;
 
-    const timeout = window.setTimeout(
-      onBrowse ?? onEnter,
-      WELCOME_TRANSITION_DELAY_MS,
-    );
+    const timeout = window.setTimeout(onBrowse, WELCOME_TRANSITION_DELAY_MS);
     return () => window.clearTimeout(timeout);
-  }, [actionSelected, error, onEnter, onBrowse, screen]);
-
-  const enterAuth = () => {
-    setActionSelected(true);
-    onEnter();
-  };
-
-  const enterBrowse = () => {
-    setActionSelected(true);
-    onBrowse?.();
-  };
+  }, [error, onBrowse, screen]);
 
   return (
     <main className="bbs-landing">
@@ -75,14 +59,6 @@ export function WelcomeScreen({
         ) : (
           <p className="bbs-status">{error ? 'Welcome screen unavailable.' : 'Loading welcome screen…'}</p>
         )}
-        <div className="bbs-actions">
-          <button type="button" onClick={enterAuth}>Log in or register</button>
-          {onBrowse && (
-            <button type="button" className="link" onClick={enterBrowse}>
-              Browse without an account
-            </button>
-          )}
-        </div>
       </section>
     </main>
   );

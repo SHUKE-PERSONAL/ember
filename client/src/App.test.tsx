@@ -125,6 +125,9 @@ describe('activation route', () => {
     });
 
     expect(container.querySelector('main.bbs-landing')).not.toBeNull();
+    expect(container.querySelector('main.bbs-landing button')).toBeNull();
+    expect(container.textContent).not.toContain('Log in or register');
+    expect(container.textContent).not.toContain('Browse without an account');
     await act(async () => {
       vi.advanceTimersByTime(WELCOME_TRANSITION_DELAY_MS);
     });
@@ -161,13 +164,14 @@ describe('activation route', () => {
       await Promise.resolve();
     });
 
-    const login = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent === 'Log in or register');
+    await act(async () => {
+      vi.advanceTimersByTime(WELCOME_TRANSITION_DELAY_MS);
+    });
+    const login = Array.from(container.querySelectorAll<HTMLButtonElement>('main.app .topbar button'))
+      .find((button) => button.textContent === 'Log in');
     await act(async () => login?.click());
     expect(container.querySelector('form.auth')).not.toBeNull();
-    await act(async () => {
-      vi.advanceTimersByTime(WELCOME_TRANSITION_DELAY_MS + 500);
-    });
+    await act(async () => vi.advanceTimersByTime(WELCOME_TRANSITION_DELAY_MS + 500));
     expect(container.querySelector('form.auth')).not.toBeNull();
 
     const browse = Array.from(container.querySelectorAll('button'))
