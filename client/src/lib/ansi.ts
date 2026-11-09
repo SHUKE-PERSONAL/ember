@@ -58,6 +58,11 @@ const CP437_BOX_GLYPHS: Record<number, string> = {
   0xde: '▐',
   0xdf: '▀',
 };
+const CP437_BOX_GLYPH_SET = new Set(Object.values(CP437_BOX_GLYPHS));
+
+export function isAnsiBoxGlyph(character: string) {
+  return CP437_BOX_GLYPH_SET.has(character);
+}
 
 const initialStyle = (): AnsiStyle => ({
   bold: false,

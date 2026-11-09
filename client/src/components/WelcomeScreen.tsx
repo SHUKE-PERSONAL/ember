@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import ansiAsset from '../assets/SHUKE.ANS?url';
-import { ansiStyleClass, parseAnsiScreen, type AnsiLine } from '../lib/ansi';
+import { ansiStyleClass, isAnsiBoxGlyph, parseAnsiScreen, type AnsiLine } from '../lib/ansi';
 
 export const WELCOME_TRANSITION_DELAY_MS = 1500;
 
@@ -44,18 +44,21 @@ export function WelcomeScreen({
           Shuke Computer Info BBS
         </h1>
         {screen ? (
-          <pre className="bbs-screen" aria-label="Shuke Computer Info BBS welcome screen">
-            {screen.map((line, lineIndex) => (
-              <span className="bbs-line" key={lineIndex}>
-                {line.map((cell, cellIndex) => (
-                  <span className={ansiStyleClass(cell.style)} key={cellIndex}>
-                    {cell.character}
-                  </span>
+          <div className="bbs-screen-wrap">
+            <table className="bbs-screen" aria-label="Shuke Computer Info BBS welcome screen">
+              <tbody>
+                {screen.map((line, lineIndex) => (
+                  <tr key={lineIndex}>
+                    {line.map((cell, cellIndex) => (
+                      <td className={ansiStyleClass(cell.style)} key={cellIndex}>
+                        {isAnsiBoxGlyph(cell.character) ? '' : cell.character}
+                      </td>
+                    ))}
+                  </tr>
                 ))}
-                {'\n'}
-              </span>
-            ))}
-          </pre>
+              </tbody>
+            </table>
+          </div>
         ) : (
           <p className="bbs-status">{error ? 'Welcome screen unavailable.' : 'Loading welcome screen…'}</p>
         )}
