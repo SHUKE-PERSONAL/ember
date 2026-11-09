@@ -18,26 +18,37 @@ export default function App() {
 }
 
 function AuthenticatedApp() {
-  const messageRoute = getMessageHandle(window.location.pathname);
+  const { pathname } = window.location;
+  const messageRoute = getMessageHandle(pathname);
+  const rootLanding = /^\/?$/.test(pathname);
 
   return (
     <AuthGate
-      unauthenticated={(showAuth, browse) => messageRoute !== undefined ? (
-        <AuthPromptRedirect showAuth={showAuth} />
-      ) : (
-        <WelcomeScreen onEnter={showAuth} onBrowse={browse} />
-      )}
+      unauthenticated={(showAuth, browse) => {
+        if (messageRoute !== undefined) {
+          return <AuthPromptRedirect onRedirect={showAuth} message="Log in to use Messages…" />;
+        }
+        if (rootLanding) return <WelcomeScreen onEnter={showAuth} onBrowse={browse} />;
+        // Public post, profile, topic, and search routes enter AppShell directly.
+        return <AuthPromptRedirect onRedirect={browse} message="Loading…" />;
+      }}
     >
       {(user, logout) => <AppShell user={user} logout={logout} />}
     </AuthGate>
   );
 }
 
-function AuthPromptRedirect({ showAuth }: { showAuth: () => void }) {
+function AuthPromptRedirect({
+  onRedirect,
+  message,
+}: {
+  onRedirect: () => void;
+  message: string;
+}) {
   useEffect(() => {
-    showAuth();
-  }, [showAuth]);
-  return <p className="muted">Log in to use Messages…</p>;
+    onRedirect();
+  }, [onRedirect]);
+  return <p className="muted">{message}</p>;
 }
 
 function AppShell({ user, logout }: { user: User | null; logout: () => void }) {
@@ -49,7 +60,9 @@ function AppShell({ user, logout }: { user: User | null; logout: () => void }) {
   const searchQuery = getSearchQuery(window.location);
   const messageHandle = getMessageHandle(window.location.pathname);
 
-  if (messageHandle !== undefined && !user) return <AuthPromptRedirect showAuth={showAuth} />;
+  if (messageHandle !== undefined && !user) {
+    return <AuthPromptRedirect onRedirect={showAuth} message="Log in to use Messages…" />;
+  }
   if (profileHandle) return <Profile handle={profileHandle} user={user} logout={logout} />;
   if (postId) return <PostDetail id={postId} user={user} logout={logout} />;
   if (topicTag) return <Topic tag={topicTag} user={user} logout={logout} />;

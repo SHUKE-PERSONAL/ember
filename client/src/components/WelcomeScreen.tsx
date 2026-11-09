@@ -13,6 +13,7 @@ export function WelcomeScreen({
 }) {
   const [screen, setScreen] = useState<AnsiLine[] | null>(null);
   const [error, setError] = useState(false);
+  const [actionSelected, setActionSelected] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -33,11 +34,24 @@ export function WelcomeScreen({
   }, []);
 
   useEffect(() => {
-    if (!screen || error) return;
+    if (!screen || error || actionSelected) return;
 
-    const timeout = window.setTimeout(onEnter, WELCOME_TRANSITION_DELAY_MS);
+    const timeout = window.setTimeout(
+      onBrowse ?? onEnter,
+      WELCOME_TRANSITION_DELAY_MS,
+    );
     return () => window.clearTimeout(timeout);
-  }, [error, onEnter, screen]);
+  }, [actionSelected, error, onEnter, onBrowse, screen]);
+
+  const enterAuth = () => {
+    setActionSelected(true);
+    onEnter();
+  };
+
+  const enterBrowse = () => {
+    setActionSelected(true);
+    onBrowse?.();
+  };
 
   return (
     <main className="bbs-landing">
@@ -62,9 +76,9 @@ export function WelcomeScreen({
           <p className="bbs-status">{error ? 'Welcome screen unavailable.' : 'Loading welcome screen…'}</p>
         )}
         <div className="bbs-actions">
-          <button type="button" onClick={onEnter}>Log in or register</button>
+          <button type="button" onClick={enterAuth}>Log in or register</button>
           {onBrowse && (
-            <button type="button" className="link" onClick={onBrowse}>
+            <button type="button" className="link" onClick={enterBrowse}>
               Browse without an account
             </button>
           )}
