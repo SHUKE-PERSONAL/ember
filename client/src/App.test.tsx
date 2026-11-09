@@ -3,8 +3,9 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { api, ApiError, type User } from './api';
+import { api, ApiError, type Post, type Profile, type User } from './api';
 import App from './App';
+import { WELCOME_TRANSITION_DELAY_MS } from './components/WelcomeScreen';
 
 const user: User = {
   id: 'user-id',
@@ -16,6 +17,30 @@ const user: User = {
   createdAt: '2026-08-22T00:00:00.000Z',
 };
 
+const publicPost: Post = {
+  id: 'public-post',
+  text: 'A public post',
+  replyToId: null,
+  repostOfId: null,
+  createdAt: '2026-08-22T00:00:00.000Z',
+  author: { id: 'author-id', handle: 'author', displayName: 'Public Author' },
+  likeCount: 0,
+  liked: false,
+  reposted: false,
+  repostOf: null,
+};
+
+const publicProfile: Profile = {
+  id: 'author-id',
+  handle: 'author',
+  displayName: 'Public Author',
+  bio: 'A public profile',
+  createdAt: '2026-08-22T00:00:00.000Z',
+  followerCount: 0,
+  followingCount: 0,
+  isFollowing: false,
+};
+
 describe('activation route', () => {
   let root: Root | undefined;
 
@@ -23,6 +48,7 @@ describe('activation route', () => {
     act(() => root?.unmount());
     window.history.replaceState({}, '', '/');
     vi.unstubAllGlobals();
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -77,7 +103,8 @@ describe('activation route', () => {
     expect(messages).not.toHaveBeenCalled();
   });
 
-  it('prompts anonymous visitors before posting from home', async () => {
+  it('automatically browses anonymously before prompting for a write', async () => {
+    vi.useFakeTimers();
     vi.spyOn(api, 'me').mockRejectedValue(new Error('not authenticated'));
     vi.spyOn(api, 'timeline').mockResolvedValue({ posts: [], nextCursor: null });
     const createPost = vi.spyOn(api, 'createPost');
@@ -97,14 +124,13 @@ describe('activation route', () => {
       await Promise.resolve();
     });
 
-    const browse = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent === 'Browse without an account');
-    expect(browse).not.toBeUndefined();
+    expect(container.querySelector('main.bbs-landing')).not.toBeNull();
     await act(async () => {
-      browse?.click();
-      await Promise.resolve();
+      vi.advanceTimersByTime(WELCOME_TRANSITION_DELAY_MS);
     });
 
+    expect(container.querySelector('main.app')).not.toBeNull();
+    expect(container.querySelector('form.auth')).toBeNull();
     const loginToPost = Array.from(container.querySelectorAll('button'))
       .find((button) => button.textContent === 'Log in or register');
     expect(loginToPost).not.toBeUndefined();
@@ -112,5 +138,75 @@ describe('activation route', () => {
 
     expect(container.querySelector('form.auth')).not.toBeNull();
     expect(createPost).not.toHaveBeenCalled();
+  });
+
+  it('returns from the auth form to anonymous browsing without reloading', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(api, 'me').mockRejectedValue(new Error('not authenticated'));
+    vi.spyOn(api, 'timeline').mockResolvedValue({ posts: [], nextCursor: null });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        arrayBuffer: async () => Uint8Array.of(0x48).buffer,
+      }),
+    );
+    const container = document.createElement('div');
+
+    await act(async () => {
+      root = createRoot(container);
+      root.render(<App />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const login = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Log in or register');
+    await act(async () => login?.click());
+    expect(container.querySelector('form.auth')).not.toBeNull();
+    await act(async () => {
+      vi.advanceTimersByTime(WELCOME_TRANSITION_DELAY_MS + 500);
+    });
+    expect(container.querySelector('form.auth')).not.toBeNull();
+
+    const browse = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Browse without an account');
+    await act(async () => browse?.click());
+
+    expect(container.querySelector('form.auth')).toBeNull();
+    expect(container.querySelector('main.app')).not.toBeNull();
+  });
+
+  it.each([
+    ['post', '/posts/public-post', 'A public post'],
+    ['profile', '/@author', 'Public Author'],
+    ['topic', '/topic/ember', '#ember'],
+    ['search', '/search?q=ember', 'Results for “ember”'],
+  ])('renders anonymous %s deep links directly', async (_kind, pathname, expectedText) => {
+    window.history.replaceState({}, '', pathname);
+    vi.spyOn(api, 'me').mockRejectedValue(new Error('not authenticated'));
+    if (pathname.startsWith('/posts/')) {
+      vi.spyOn(api, 'postDetail').mockResolvedValue({ post: publicPost, replies: [] });
+    } else if (pathname.startsWith('/@')) {
+      vi.spyOn(api, 'profile').mockResolvedValue(publicProfile);
+      vi.spyOn(api, 'profilePosts').mockResolvedValue({ posts: [], nextCursor: null });
+    } else if (pathname.startsWith('/topic/')) {
+      vi.spyOn(api, 'topicPosts').mockResolvedValue({ posts: [], nextCursor: null });
+    } else {
+      vi.spyOn(api, 'search').mockResolvedValue({ posts: [], users: [], nextCursor: null });
+    }
+    const container = document.createElement('div');
+
+    await act(async () => {
+      root = createRoot(container);
+      root.render(<App />);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('main.bbs-landing')).toBeNull();
+    expect(container.querySelector('form.auth')).toBeNull();
+    expect(container.textContent).toContain(expectedText);
   });
 });

@@ -24,12 +24,13 @@ describe('WelcomeScreen', () => {
       }),
     );
     const onEnter = vi.fn();
+    const onBrowse = vi.fn();
     const container = document.createElement('div');
     document.body.append(container);
 
     await act(async () => {
       root = createRoot(container);
-      root.render(<WelcomeScreen onEnter={onEnter} />);
+      root.render(<WelcomeScreen onEnter={onEnter} onBrowse={onBrowse} />);
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -45,7 +46,41 @@ describe('WelcomeScreen', () => {
     await act(async () => {
       vi.advanceTimersByTime(1);
     });
+    expect(onBrowse).toHaveBeenCalledOnce();
+    expect(onEnter).not.toHaveBeenCalled();
+    container.remove();
+  });
+
+  it('cancels auto-browse after an explicit auth choice', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        arrayBuffer: async () => Uint8Array.of(0x48).buffer,
+      }),
+    );
+    const onEnter = vi.fn();
+    const onBrowse = vi.fn();
+    const container = document.createElement('div');
+    document.body.append(container);
+
+    await act(async () => {
+      root = createRoot(container);
+      root.render(<WelcomeScreen onEnter={onEnter} onBrowse={onBrowse} />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const login = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Log in or register');
+    await act(async () => login?.click());
     expect(onEnter).toHaveBeenCalledOnce();
+
+    await act(async () => {
+      vi.advanceTimersByTime(WELCOME_TRANSITION_DELAY_MS);
+    });
+    expect(onBrowse).not.toHaveBeenCalled();
     container.remove();
   });
 

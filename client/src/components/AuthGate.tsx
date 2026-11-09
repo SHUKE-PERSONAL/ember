@@ -65,7 +65,7 @@ export function AuthGate({
     api.logout().finally(() => {
       setUser(null);
       setShowAuth(false);
-      setBrowsing(false);
+      setBrowsing(true);
       setActivationPending(false);
     });
   }, []);
@@ -82,6 +82,7 @@ export function AuthGate({
         setActivationPending(!registered.emailVerifiedAt);
         setUser(registered);
       }}
+      onBrowse={browse}
     />
   );
 
@@ -138,9 +139,11 @@ function ActivationPending({ user, logout }: { user: User; logout: () => void })
 export function AuthForm({
   onAuthed,
   onRegistered,
+  onBrowse,
 }: {
   onAuthed: (u: User) => void;
   onRegistered?: (u: User) => void;
+  onBrowse?: () => void;
 }) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [handle, setHandle] = useState('');
@@ -209,6 +212,11 @@ export function AuthForm({
       >
         {mode === 'login' ? 'Need an account? Register' : 'Have an account? Log in'}
       </button>
+      {onBrowse && (
+        <button type="button" className="link" onClick={onBrowse}>
+          Browse without an account
+        </button>
+      )}
     </form>
   );
 }

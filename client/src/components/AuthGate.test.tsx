@@ -187,4 +187,34 @@ describe('AuthForm', () => {
     expect(container.textContent).toContain('public shell');
     container.remove();
   });
+
+  it('returns a logged-out session directly to the public shell', async () => {
+    vi.spyOn(api, 'me').mockResolvedValue(user);
+    vi.spyOn(api, 'logout').mockResolvedValue(undefined);
+    const container = document.createElement('div');
+    document.body.append(container);
+
+    await act(async () => {
+      root = createRoot(container);
+      root.render(
+        <AuthGate>
+          {(currentUser, logout) => currentUser ? (
+            <button type="button" onClick={logout}>Log out</button>
+          ) : (
+            <p>public shell</p>
+          )}
+        </AuthGate>,
+      );
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button')?.click();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('public shell');
+    expect(container.querySelector('form.auth')).toBeNull();
+    container.remove();
+  });
 });
