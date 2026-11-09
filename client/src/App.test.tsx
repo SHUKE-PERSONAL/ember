@@ -22,6 +22,7 @@ describe('activation route', () => {
   afterEach(() => {
     act(() => root?.unmount());
     window.history.replaceState({}, '', '/');
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
@@ -56,5 +57,60 @@ describe('activation route', () => {
 
     expect(container.textContent).toContain('Activation failed');
     expect(container.textContent).toContain('invalid or expired activation token');
+  });
+
+  it('prompts anonymous visitors for auth on the messages route', async () => {
+    window.history.replaceState({}, '', '/messages');
+    vi.spyOn(api, 'me').mockRejectedValue(new Error('not authenticated'));
+    const messages = vi.spyOn(api, 'messages');
+    const container = document.createElement('div');
+
+    await act(async () => {
+      root = createRoot(container);
+      root.render(<App />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('form.auth')).not.toBeNull();
+    expect(container.textContent).toContain('Log in');
+    expect(messages).not.toHaveBeenCalled();
+  });
+
+  it('prompts anonymous visitors before posting from home', async () => {
+    vi.spyOn(api, 'me').mockRejectedValue(new Error('not authenticated'));
+    vi.spyOn(api, 'timeline').mockResolvedValue({ posts: [], nextCursor: null });
+    const createPost = vi.spyOn(api, 'createPost');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        arrayBuffer: async () => Uint8Array.of(0x48).buffer,
+      }),
+    );
+    const container = document.createElement('div');
+
+    await act(async () => {
+      root = createRoot(container);
+      root.render(<App />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const browse = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Browse without an account');
+    expect(browse).not.toBeUndefined();
+    await act(async () => {
+      browse?.click();
+      await Promise.resolve();
+    });
+
+    const loginToPost = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Log in or register');
+    expect(loginToPost).not.toBeUndefined();
+    await act(async () => loginToPost?.click());
+
+    expect(container.querySelector('form.auth')).not.toBeNull();
+    expect(createPost).not.toHaveBeenCalled();
   });
 });

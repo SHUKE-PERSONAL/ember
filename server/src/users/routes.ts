@@ -6,8 +6,6 @@ import { postSelect, serializePost } from '../posts/routes.js';
 
 export const usersRouter = Router();
 
-usersRouter.use(requireAuth);
-
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
 
@@ -25,21 +23,23 @@ const profileShape = {
   },
 } as const;
 
-async function getProfile(handle: string, viewerId: string) {
+async function getProfile(handle: string, viewerId: string | null) {
   const user = await prisma.user.findUnique({
     where: { handle },
     select: profileShape,
   });
   if (!user) return null;
 
-  const follow = await prisma.follow.findUnique({
-    where: {
-      followerId_followingId: {
-        followerId: viewerId,
-        followingId: user.id,
+  const follow = viewerId
+    ? await prisma.follow.findUnique({
+      where: {
+        followerId_followingId: {
+          followerId: viewerId,
+          followingId: user.id,
+        },
       },
-    },
-  });
+    })
+    : null;
 
   return {
     id: user.id,
@@ -53,7 +53,7 @@ async function getProfile(handle: string, viewerId: string) {
   };
 }
 
-async function requireProfile(handle: string, viewerId: string, res: Response) {
+async function requireProfile(handle: string, viewerId: string | null, res: Response) {
   const profile = await getProfile(handle, viewerId);
   if (!profile) {
     res.status(404).json({ error: 'user not found' });
@@ -82,7 +82,7 @@ usersRouter.get('/users/:handle/posts', asyncHandler(async (req: Request, res: R
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     take: limit + 1,
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-    select: postSelect(req.session.userId!),
+    select: postSelect(req.session.userId ?? null),
   });
 
   const posts = rows.slice(0, limit).map(serializePost);
@@ -91,12 +91,12 @@ usersRouter.get('/users/:handle/posts', asyncHandler(async (req: Request, res: R
 }));
 
 usersRouter.get('/users/:handle', asyncHandler(async (req: Request, res: Response) => {
-  const profile = await requireProfile(req.params.handle, req.session.userId!, res);
+  const profile = await requireProfile(req.params.handle, req.session.userId ?? null, res);
   if (!profile) return;
   return res.json(profile);
 }));
 
-usersRouter.post('/users/:handle/follow', asyncHandler(async (req: Request, res: Response) => {
+usersRouter.post('/users/:handle/follow', requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const profile = await requireProfile(req.params.handle, req.session.userId!, res);
   if (!profile) return;
 
@@ -122,7 +122,7 @@ usersRouter.post('/users/:handle/follow', asyncHandler(async (req: Request, res:
   return res.json(updated);
 }));
 
-usersRouter.delete('/users/:handle/follow', asyncHandler(async (req: Request, res: Response) => {
+usersRouter.delete('/users/:handle/follow', requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const profile = await requireProfile(req.params.handle, req.session.userId!, res);
   if (!profile) return;
 

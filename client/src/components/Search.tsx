@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError, type Author, type Post, type User } from '../api';
+import { useAuth } from './AuthGate';
 import { PostItem } from './PostItem';
 
 export function Search({
@@ -8,9 +9,10 @@ export function Search({
   logout,
 }: {
   query: string;
-  user: User;
+  user: User | null;
   logout: () => void;
 }) {
+  const { showAuth } = useAuth();
   const [input, setInput] = useState(query);
   const [posts, setPosts] = useState<Post[]>([]);
   const [userResults, setUserResults] = useState<Author[]>([]);
@@ -69,12 +71,18 @@ export function Search({
       <header className="topbar">
         <h1><a href="/" className="brand-link">Ember</a></h1>
         <nav className="who">
-          <a className="handle profile-link" href={`/@${encodeURIComponent(user.handle)}`}>
-            @{user.handle}
-          </a>
-          <button type="button" className="link" onClick={logout}>
-            Log out
-          </button>
+          {user ? (
+            <>
+              <a className="handle profile-link" href={`/@${encodeURIComponent(user.handle)}`}>
+                @{user.handle}
+              </a>
+              <button type="button" className="link" onClick={logout}>
+                Log out
+              </button>
+            </>
+          ) : (
+            <button type="button" className="link" onClick={showAuth}>Log in</button>
+          )}
         </nav>
       </header>
 

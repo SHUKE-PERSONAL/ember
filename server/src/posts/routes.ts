@@ -41,9 +41,7 @@ const replyOrderBy: Prisma.PostOrderByWithRelationInput[] = [
 
 // Shape returned for a timeline/created post. Text is always returned in full;
 // the 140-grapheme fold is a client display concern.
-export const postSelect = (viewerId: string) => ({
-  ...originalPostSelect,
-  _count: { select: { likes: true } },
+const viewerInteractionSelect = (viewerId: string | null) => viewerId ? {
   likes: {
     where: { userId: viewerId },
     select: { userId: true },
@@ -52,10 +50,16 @@ export const postSelect = (viewerId: string) => ({
     where: { authorId: viewerId },
     select: { id: true },
   },
+} : {};
+
+export const postSelect = (viewerId: string | null) => ({
+  ...originalPostSelect,
+  _count: { select: { likes: true } },
+  ...viewerInteractionSelect(viewerId),
   repostOf: { select: originalPostSelect },
 } as const);
 
-const detailSelect = (viewerId: string) => ({
+const detailSelect = (viewerId: string | null) => ({
   ...postSelect(viewerId),
   replies: {
     orderBy: replyOrderBy,
@@ -67,7 +71,7 @@ type PostRow = Prisma.PostGetPayload<{ select: ReturnType<typeof postSelect> }>;
 type DetailRow = Prisma.PostGetPayload<{ select: ReturnType<typeof detailSelect> }>;
 
 export function serializePost(post: PostRow) {
-  const { _count, likes, reposts, ...rest } = post;
+  const { _count, likes = [], reposts = [], ...rest } = post;
   return {
     ...rest,
     likeCount: _count.likes,
@@ -155,9 +159,6 @@ postsRouter.post('/posts', requireApiKeyWhenPresented, asyncHandler(async (req: 
   }
 }));
 
-// Session-authenticated routes remain unchanged below the API-key route.
-postsRouter.use(requireAuth);
-
 function parseLimit(req: Request) {
   const rawLimit = Number(req.query.limit);
   return Number.isFinite(rawLimit)
@@ -181,7 +182,7 @@ function paginateRows<T extends { id: string }>(rows: T[], cursor: string | unde
   };
 }
 
-postsRouter.post('/posts', asyncHandler(async (req: Request, res: Response) => {
+postsRouter.post('/posts', requireAuth, asyncHandler(async (req: Request, res: Response) => {
   if (!(await assertPostingAllowed(req.session.userId!, res))) return;
   const text = parsePostText(req, res);
   if (text === null) return;
@@ -196,11 +197,12 @@ postsRouter.post('/posts', asyncHandler(async (req: Request, res: Response) => {
 postsRouter.get('/topics/:tag/posts', asyncHandler(async (req: Request, res: Response) => {
   const tag = normalizeTopicTag(req.params.tag);
   if (!tag) return res.status(400).json({ error: 'invalid topic' });
+  const viewerId = req.session.userId ?? null;
 
   const rows = await prisma.post.findMany({
     where: { text: { contains: `#${tag}`, mode: 'insensitive' } },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-    select: postSelect(req.session.userId!),
+    select: postSelect(viewerId),
   });
   const matchingRows = rows.filter((post) => postHasTopic(post.text, tag));
   const page = paginateRows(matchingRows, parseCursor(req), parseLimit(req));
@@ -214,6 +216,7 @@ postsRouter.get('/topics/:tag/posts', asyncHandler(async (req: Request, res: Res
 postsRouter.get('/search', asyncHandler(async (req: Request, res: Response) => {
   const query = typeof req.query.q === 'string' ? req.query.q.trim() : '';
   if (!query) return res.json({ posts: [], users: [], nextCursor: null });
+  const viewerId = req.session.userId ?? null;
 
   const limit = parseLimit(req);
   const cursor = parseCursor(req);
@@ -229,7 +232,7 @@ postsRouter.get('/search', asyncHandler(async (req: Request, res: Response) => {
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-      select: postSelect(req.session.userId!),
+      select: postSelect(viewerId),
     }),
     prisma.user.findMany({
       where: {
@@ -250,9 +253,10 @@ postsRouter.get('/search', asyncHandler(async (req: Request, res: Response) => {
 }));
 
 postsRouter.get('/posts/:id', asyncHandler(async (req: Request, res: Response) => {
+  const viewerId = req.session.userId ?? null;
   const post = await prisma.post.findUnique({
     where: { id: req.params.id },
-    select: detailSelect(req.session.userId!),
+    select: detailSelect(viewerId),
   });
   if (!post) return res.status(404).json({ error: 'post not found' });
 
@@ -263,7 +267,7 @@ postsRouter.get('/posts/:id', asyncHandler(async (req: Request, res: Response) =
   });
 }));
 
-postsRouter.post('/posts/:id/reply', asyncHandler(async (req: Request, res: Response) => {
+postsRouter.post('/posts/:id/reply', requireAuth, asyncHandler(async (req: Request, res: Response) => {
   if (!(await assertPostingAllowed(req.session.userId!, res))) return;
   const text = parsePostText(req, res);
   if (text === null) return;
@@ -285,7 +289,7 @@ postsRouter.post('/posts/:id/reply', asyncHandler(async (req: Request, res: Resp
   return res.status(201).json(serializePost(reply));
 }));
 
-postsRouter.post('/posts/:id/like', asyncHandler(async (req: Request, res: Response) => {
+postsRouter.post('/posts/:id/like', requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const post = await prisma.post.findUnique({
     where: { id: req.params.id },
     select: { id: true },
@@ -307,7 +311,7 @@ postsRouter.post('/posts/:id/like', asyncHandler(async (req: Request, res: Respo
   return res.json({ liked: true, likeCount });
 }));
 
-postsRouter.delete('/posts/:id/like', asyncHandler(async (req: Request, res: Response) => {
+postsRouter.delete('/posts/:id/like', requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const post = await prisma.post.findUnique({
     where: { id: req.params.id },
     select: { id: true },
@@ -321,7 +325,7 @@ postsRouter.delete('/posts/:id/like', asyncHandler(async (req: Request, res: Res
   return res.json({ liked: false, likeCount });
 }));
 
-postsRouter.post('/posts/:id/repost', asyncHandler(async (req: Request, res: Response) => {
+postsRouter.post('/posts/:id/repost', requireAuth, asyncHandler(async (req: Request, res: Response) => {
   if (!(await assertPostingAllowed(req.session.userId!, res))) return;
   const original = await prisma.post.findUnique({
     where: { id: req.params.id },
@@ -347,7 +351,7 @@ postsRouter.post('/posts/:id/repost', asyncHandler(async (req: Request, res: Res
   return res.status(201).json({ reposted: true, post: serializePost(repost) });
 }));
 
-postsRouter.delete('/posts/:id/repost', asyncHandler(async (req: Request, res: Response) => {
+postsRouter.delete('/posts/:id/repost', requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const original = await prisma.post.findUnique({
     where: { id: req.params.id },
     select: { id: true },
@@ -371,20 +375,24 @@ postsRouter.delete('/posts/:id/repost', asyncHandler(async (req: Request, res: R
 }));
 
 postsRouter.get('/timeline', asyncHandler(async (req: Request, res: Response) => {
-  const userId = req.session.userId!;
+  const userId = req.session.userId ?? null;
 
   const limit = parseLimit(req);
   const cursor = parseCursor(req);
 
-  const followed = await prisma.follow.findMany({
-    where: { followerId: userId },
-    select: { followingId: true },
-  });
-  const authorIds = [userId, ...followed.map((f) => f.followingId)];
+  const authorIds = userId
+    ? [
+      userId,
+      ...(await prisma.follow.findMany({
+        where: { followerId: userId },
+        select: { followingId: true },
+      })).map((f) => f.followingId),
+    ]
+    : null;
 
   // Fetch one extra to detect whether another page exists.
   const rows = await prisma.post.findMany({
-    where: { authorId: { in: authorIds } },
+    where: authorIds ? { authorId: { in: authorIds } } : {},
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     take: limit + 1,
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),

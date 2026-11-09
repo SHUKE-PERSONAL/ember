@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { api, ApiError } from './api';
-import { AuthGate } from './components/AuthGate';
+import { api, ApiError, type User } from './api';
+import { AuthGate, useAuth } from './components/AuthGate';
 import { Compose } from './components/Compose';
 import { Profile } from './components/Profile';
 import { PostDetail } from './components/PostDetail';
@@ -18,47 +18,79 @@ export default function App() {
 }
 
 function AuthenticatedApp() {
+  const messageRoute = getMessageHandle(window.location.pathname);
+
+  return (
+    <AuthGate
+      unauthenticated={(showAuth, browse) => messageRoute !== undefined ? (
+        <AuthPromptRedirect showAuth={showAuth} />
+      ) : (
+        <WelcomeScreen onEnter={showAuth} onBrowse={browse} />
+      )}
+    >
+      {(user, logout) => <AppShell user={user} logout={logout} />}
+    </AuthGate>
+  );
+}
+
+function AuthPromptRedirect({ showAuth }: { showAuth: () => void }) {
+  useEffect(() => {
+    showAuth();
+  }, [showAuth]);
+  return <p className="muted">Log in to use Messages…</p>;
+}
+
+function AppShell({ user, logout }: { user: User | null; logout: () => void }) {
   const timeline = useRef<TimelineHandle>(null);
+  const { showAuth } = useAuth();
   const profileHandle = getProfileHandle(window.location.pathname);
   const postId = getPostId(window.location.pathname);
   const topicTag = getTopicTag(window.location.pathname);
   const searchQuery = getSearchQuery(window.location);
   const messageHandle = getMessageHandle(window.location.pathname);
 
+  if (messageHandle !== undefined && !user) return <AuthPromptRedirect showAuth={showAuth} />;
+  if (profileHandle) return <Profile handle={profileHandle} user={user} logout={logout} />;
+  if (postId) return <PostDetail id={postId} user={user} logout={logout} />;
+  if (topicTag) return <Topic tag={topicTag} user={user} logout={logout} />;
+  if (searchQuery !== null) return <Search query={searchQuery} user={user} logout={logout} />;
+  if (messageHandle !== undefined) {
+    return <Messages handle={messageHandle} user={user!} logout={logout} />;
+  }
+
   return (
-    <AuthGate unauthenticated={(showAuth) => <WelcomeScreen onEnter={showAuth} />}>
-      {(user, logout) => (
-        profileHandle ? (
-          <Profile handle={profileHandle} user={user} logout={logout} />
-        ) : postId ? (
-          <PostDetail id={postId} user={user} logout={logout} />
-        ) : topicTag ? (
-          <Topic tag={topicTag} user={user} logout={logout} />
-        ) : searchQuery !== null ? (
-          <Search query={searchQuery} user={user} logout={logout} />
-        ) : messageHandle !== undefined ? (
-          <Messages handle={messageHandle} user={user} logout={logout} />
-        ) : (
-          <main className="app">
-            <header className="topbar">
-              <h1>Ember</h1>
-              <div className="who">
-                <a href="/search">Search</a>
-                <a href="/messages">Messages</a>
-                <a className="handle profile-link" href={`/@${encodeURIComponent(user.handle)}`}>
-                  @{user.handle}
-                </a>
-                <button type="button" className="link" onClick={logout}>
-                  Log out
-                </button>
-              </div>
-            </header>
-            <Compose user={user} onPosted={(post) => timeline.current?.prepend(post)} />
-            <Timeline ref={timeline} />
-          </main>
-        )
+    <main className="app">
+      <header className="topbar">
+        <h1>Ember</h1>
+        <div className="who">
+          <a href="/search">Search</a>
+          <a href="/messages">Messages</a>
+          {user ? (
+            <>
+              <a className="handle profile-link" href={`/@${encodeURIComponent(user.handle)}`}>
+                @{user.handle}
+              </a>
+              <button type="button" className="link" onClick={logout}>
+                Log out
+              </button>
+            </>
+          ) : (
+            <button type="button" className="link" onClick={showAuth}>
+              Log in
+            </button>
+          )}
+        </div>
+      </header>
+      {user ? (
+        <Compose user={user} onPosted={(post) => timeline.current?.prepend(post)} />
+      ) : (
+        <section className="compose compose-notice">
+          <p>Log in to post.</p>
+          <button type="button" onClick={showAuth}>Log in or register</button>
+        </section>
       )}
-    </AuthGate>
+      <Timeline ref={timeline} />
+    </main>
   );
 }
 

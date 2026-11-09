@@ -162,4 +162,29 @@ describe('AuthForm', () => {
     expect(container.textContent).toContain('Activation email sent.');
     container.remove();
   });
+
+  it('enters the public shell without a session', async () => {
+    vi.spyOn(api, 'me').mockRejectedValue(new Error('not authenticated'));
+    const container = document.createElement('div');
+    document.body.append(container);
+
+    await act(async () => {
+      root = createRoot(container);
+      root.render(
+        <AuthGate
+          unauthenticated={(_showAuth, browse) => <button onClick={browse}>Browse</button>}
+        >
+          {(currentUser) => <p>{currentUser ? currentUser.handle : 'public shell'}</p>}
+        </AuthGate>,
+      );
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button')?.click();
+    });
+
+    expect(container.textContent).toContain('public shell');
+    container.remove();
+  });
 });

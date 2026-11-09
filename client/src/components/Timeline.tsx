@@ -25,7 +25,7 @@ export const Timeline = forwardRef<TimelineHandle>(function Timeline(_props, ref
         setPosts(t.posts);
         setNextCursor(t.nextCursor);
       })
-      .catch(() => setError('could not load your timeline'))
+      .catch(() => setError('could not load timeline'))
       .finally(() => setLoading(false));
   }, []);
 
@@ -43,10 +43,10 @@ export const Timeline = forwardRef<TimelineHandle>(function Timeline(_props, ref
     }
   };
 
-  if (loading) return <p className="muted">Loading your timeline…</p>;
+  if (loading) return <p className="muted">Loading timeline…</p>;
   if (error) return <p className="error">{error}</p>;
   if (posts.length === 0) {
-    return <p className="muted empty">Nothing here yet. Follow someone, or write the first post.</p>;
+    return <p className="muted empty">Nothing here yet. Write the first post.</p>;
   }
 
   return (

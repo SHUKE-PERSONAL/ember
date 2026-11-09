@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError, type Post, type User } from '../api';
+import { useAuth } from './AuthGate';
 import { PostItem } from './PostItem';
 
 export function Topic({
@@ -8,9 +9,10 @@ export function Topic({
   logout,
 }: {
   tag: string;
-  user: User;
+  user: User | null;
   logout: () => void;
 }) {
+  const { showAuth } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -59,12 +61,18 @@ export function Topic({
         <h1><a href="/" className="brand-link">Ember</a></h1>
         <nav className="who">
           <a href="/search">Search</a>
-          <a className="handle profile-link" href={`/@${encodeURIComponent(user.handle)}`}>
-            @{user.handle}
-          </a>
-          <button type="button" className="link" onClick={logout}>
-            Log out
-          </button>
+          {user ? (
+            <>
+              <a className="handle profile-link" href={`/@${encodeURIComponent(user.handle)}`}>
+                @{user.handle}
+              </a>
+              <button type="button" className="link" onClick={logout}>
+                Log out
+              </button>
+            </>
+          ) : (
+            <button type="button" className="link" onClick={showAuth}>Log in</button>
+          )}
         </nav>
       </header>
 

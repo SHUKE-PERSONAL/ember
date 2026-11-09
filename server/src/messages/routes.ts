@@ -7,7 +7,9 @@ import { asyncHandler } from '../util/asyncHandler.js';
 import { decryptMessage, encryptMessage } from './crypto.js';
 
 export const messagesRouter = Router();
-messagesRouter.use(requireAuth);
+// This router is mounted at /api; scope the gate so public users routes that
+// follow it in the application can still serve anonymous profiles.
+messagesRouter.use('/messages', requireAuth);
 
 const authorSelect = { sender: { select: publicAuthor }, recipient: { select: publicAuthor } } as const;
 const metadataSelect = {

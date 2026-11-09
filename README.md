@@ -34,6 +34,9 @@ npm run dev
 The Vite dev server proxies `/api/*` to Express, so the browser uses a single
 origin.
 
+Open http://localhost:5173 to browse publicly. Register and activate an account
+when you want to post, reply, like, repost, follow, or use Messages.
+
 ### Environment
 
 Local server settings are in `server/.env` (copy `server/.env.example`).
@@ -120,9 +123,10 @@ Verify the public edge after the first deployment:
 
 ```bash
 curl --fail --silent https://bbs.shukelabs.com/api/health
-# Open https://bbs.shukelabs.com, register, activate the email link, compose a
-# post, and confirm it is visible on the timeline. Restart the app on sydney2
-# and confirm the same post is still visible after the check.
+# Open https://bbs.shukelabs.com and browse publicly. Register and activate the
+# email link before composing a post, then confirm it is visible on the
+# timeline. Restart the app on sydney2 and confirm the same post is still
+# visible after the check.
 ```
 
 ## Endpoints
