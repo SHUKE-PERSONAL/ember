@@ -426,19 +426,31 @@ button.more {
   box-shadow: 0 1rem 3rem rgb(0 0 0 / 45%);
 }
 
-.bbs-screen {
+.bbs-screen-wrap {
   overflow-x: auto;
-  margin: 0;
   padding: 0.75rem;
+  background: #0000aa;
+}
+
+.bbs-screen {
+  margin: 0;
+  border: 1px solid #55ff55;
+  border-collapse: collapse;
   background: #0000aa;
   color: #aaa;
   font: 0.95rem/1.35 Consolas, "DejaVu Sans Mono", "Cascadia Mono", Menlo, "Courier New", ui-monospace, monospace;
   white-space: pre;
 }
 
-.bbs-line {
-  display: block;
-  min-height: 1.35em;
+.bbs-screen td {
+  box-sizing: border-box;
+  width: 1ch;
+  min-width: 1ch;
+  height: 1.35em;
+  padding: 0;
+  border: 0;
+  text-align: left;
+  vertical-align: middle;
 }
 
 .ansi-cell {
