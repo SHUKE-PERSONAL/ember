@@ -28,7 +28,7 @@ function AuthenticatedApp() {
         if (messageRoute !== undefined) {
           return <AuthPromptRedirect onRedirect={showAuth} message="Log in to use Messages…" />;
         }
-        if (rootLanding) return <WelcomeScreen onEnter={showAuth} onBrowse={browse} />;
+        if (rootLanding) return <WelcomeScreen onBrowse={browse} />;
         // Public post, profile, topic, and search routes enter AppShell directly.
         return <AuthPromptRedirect onRedirect={browse} message="Loading…" />;
       }}

@@ -23,64 +23,33 @@ describe('WelcomeScreen', () => {
         arrayBuffer: async () => Uint8Array.of(0x48).buffer,
       }),
     );
-    const onEnter = vi.fn();
     const onBrowse = vi.fn();
     const container = document.createElement('div');
     document.body.append(container);
 
     await act(async () => {
       root = createRoot(container);
-      root.render(<WelcomeScreen onEnter={onEnter} onBrowse={onBrowse} />);
+      root.render(<WelcomeScreen onBrowse={onBrowse} />);
       await Promise.resolve();
       await Promise.resolve();
     });
 
     expect(container.querySelector('.bbs-screen')).not.toBeNull();
-    expect(onEnter).not.toHaveBeenCalled();
+    expect(container.querySelector('button')).toBeNull();
+    expect(container.querySelector('a')).toBeNull();
+    expect(container.textContent).not.toContain('Log in or register');
+    expect(container.textContent).not.toContain('Browse without an account');
+    expect(onBrowse).not.toHaveBeenCalled();
 
     await act(async () => {
       vi.advanceTimersByTime(WELCOME_TRANSITION_DELAY_MS - 1);
     });
-    expect(onEnter).not.toHaveBeenCalled();
+    expect(onBrowse).not.toHaveBeenCalled();
 
     await act(async () => {
       vi.advanceTimersByTime(1);
     });
     expect(onBrowse).toHaveBeenCalledOnce();
-    expect(onEnter).not.toHaveBeenCalled();
-    container.remove();
-  });
-
-  it('cancels auto-browse after an explicit auth choice', async () => {
-    vi.useFakeTimers();
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        arrayBuffer: async () => Uint8Array.of(0x48).buffer,
-      }),
-    );
-    const onEnter = vi.fn();
-    const onBrowse = vi.fn();
-    const container = document.createElement('div');
-    document.body.append(container);
-
-    await act(async () => {
-      root = createRoot(container);
-      root.render(<WelcomeScreen onEnter={onEnter} onBrowse={onBrowse} />);
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    const login = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent === 'Log in or register');
-    await act(async () => login?.click());
-    expect(onEnter).toHaveBeenCalledOnce();
-
-    await act(async () => {
-      vi.advanceTimersByTime(WELCOME_TRANSITION_DELAY_MS);
-    });
-    expect(onBrowse).not.toHaveBeenCalled();
     container.remove();
   });
 
@@ -90,13 +59,13 @@ describe('WelcomeScreen', () => {
       'fetch',
       vi.fn().mockResolvedValue({ ok: false, status: 503 }),
     );
-    const onEnter = vi.fn();
+    const onBrowse = vi.fn();
     const container = document.createElement('div');
     document.body.append(container);
 
     await act(async () => {
       root = createRoot(container);
-      root.render(<WelcomeScreen onEnter={onEnter} />);
+      root.render(<WelcomeScreen onBrowse={onBrowse} />);
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -106,37 +75,7 @@ describe('WelcomeScreen', () => {
     await act(async () => {
       vi.advanceTimersByTime(WELCOME_TRANSITION_DELAY_MS);
     });
-    expect(onEnter).not.toHaveBeenCalled();
+    expect(onBrowse).not.toHaveBeenCalled();
     container.remove();
   });
-
-  it('offers anonymous browsing alongside auth', async () => {
-    vi.useFakeTimers();
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        arrayBuffer: async () => Uint8Array.of(0x48).buffer,
-      }),
-    );
-    const onEnter = vi.fn();
-    const onBrowse = vi.fn();
-    const container = document.createElement('div');
-    document.body.append(container);
-
-    await act(async () => {
-      root = createRoot(container);
-      root.render(<WelcomeScreen onEnter={onEnter} onBrowse={onBrowse} />);
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    const browse = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent === 'Browse without an account');
-    expect(browse).not.toBeUndefined();
-    await act(async () => browse?.click());
-    expect(onBrowse).toHaveBeenCalledOnce();
-    container.remove();
-  });
-
 });
