@@ -131,10 +131,11 @@ describe('activation route', () => {
 
     expect(container.querySelector('main.app')).not.toBeNull();
     expect(container.querySelector('form.auth')).toBeNull();
-    const loginToPost = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent === 'Log in or register');
-    expect(loginToPost).not.toBeUndefined();
-    await act(async () => loginToPost?.click());
+    expect(container.querySelector('main.app .compose-notice')).toBeNull();
+    const login = Array.from(container.querySelectorAll<HTMLButtonElement>('main.app .topbar button'))
+      .find((button) => button.textContent === 'Log in');
+    expect(login).not.toBeUndefined();
+    await act(async () => login?.click());
 
     expect(container.querySelector('form.auth')).not.toBeNull();
     expect(createPost).not.toHaveBeenCalled();

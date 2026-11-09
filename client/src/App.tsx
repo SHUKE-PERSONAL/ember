@@ -94,14 +94,7 @@ function AppShell({ user, logout }: { user: User | null; logout: () => void }) {
           )}
         </div>
       </header>
-      {user ? (
-        <Compose user={user} onPosted={(post) => timeline.current?.prepend(post)} />
-      ) : (
-        <section className="compose compose-notice">
-          <p>Log in to post.</p>
-          <button type="button" onClick={showAuth}>Log in or register</button>
-        </section>
-      )}
+      {user && <Compose user={user} onPosted={(post) => timeline.current?.prepend(post)} />}
       <Timeline ref={timeline} />
     </main>
   );
