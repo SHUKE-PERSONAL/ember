@@ -8,6 +8,7 @@ import { Timeline, type TimelineHandle } from './components/Timeline';
 import { Search } from './components/Search';
 import { Topic } from './components/Topic';
 import { Messages } from './components/Messages';
+import { Settings } from './components/Settings';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import './styles.css';
 
@@ -20,11 +21,15 @@ export default function App() {
 function AuthenticatedApp() {
   const { pathname } = window.location;
   const messageRoute = getMessageHandle(pathname);
+  const settingsRoute = isSettingsPath(pathname);
   const rootLanding = /^\/?$/.test(pathname);
 
   return (
     <AuthGate
       unauthenticated={(showAuth, browse) => {
+        if (settingsRoute) {
+          return <AuthPromptRedirect onRedirect={showAuth} message="Log in to use Settings…" />;
+        }
         if (messageRoute !== undefined) {
           return <AuthPromptRedirect onRedirect={showAuth} message="Log in to use Messages…" />;
         }
@@ -59,9 +64,14 @@ function AppShell({ user, logout }: { user: User | null; logout: () => void }) {
   const topicTag = getTopicTag(window.location.pathname);
   const searchQuery = getSearchQuery(window.location);
   const messageHandle = getMessageHandle(window.location.pathname);
+  const settingsRoute = isSettingsPath(window.location.pathname);
 
   if (messageHandle !== undefined && !user) {
     return <AuthPromptRedirect onRedirect={showAuth} message="Log in to use Messages…" />;
+  }
+  if (settingsRoute) {
+    if (!user) return <AuthPromptRedirect onRedirect={showAuth} message="Log in to use Settings…" />;
+    return <Settings user={user} logout={logout} />;
   }
   if (profileHandle) return <Profile handle={profileHandle} user={user} logout={logout} />;
   if (postId) return <PostDetail id={postId} user={user} logout={logout} />;
@@ -80,6 +90,7 @@ function AppShell({ user, logout }: { user: User | null; logout: () => void }) {
           <a href="/messages">Messages</a>
           {user ? (
             <>
+              <a href="/settings">Settings</a>
               <a className="handle profile-link" href={`/@${encodeURIComponent(user.handle)}`}>
                 @{user.handle}
               </a>
@@ -199,4 +210,8 @@ function getMessageHandle(pathname: string): string | null | undefined {
   } catch {
     return null;
   }
+}
+
+function isSettingsPath(pathname: string) {
+  return /^\/settings\/?$/.test(pathname);
 }

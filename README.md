@@ -36,6 +36,8 @@ origin.
 
 Open http://localhost:5173 to browse publicly. Register and activate an account
 when you want to post, reply, like, repost, follow, or use Messages.
+Signed-in users can open Settings from the main navigation to change their
+password without ending the current session.
 
 ### Environment
 
@@ -134,6 +136,7 @@ curl --fail --silent https://bbs.shukelabs.com/api/health
 - `GET /api/health` → `{ "status": "ok" }`
 - `POST /api/auth/register` → create and auto-login an account, then send an activation email
 - `POST /api/auth/login` → authenticate by email or handle
+- `POST /api/auth/change-password` → change the authenticated user's password with `{ "currentPassword": "...", "newPassword": "..." }`; returns `204 No Content`
 - `POST /api/auth/activate` → activate an account with `{ "token": "..." }`
 - `POST /api/auth/resend-activation` → resend the authenticated user's activation email
 - `GET /api/me` → the authenticated user's account, including `emailVerifiedAt`

@@ -80,6 +80,137 @@ describe('POST /api/auth/register', () => {
   });
 });
 
+describe('POST /api/auth/change-password', () => {
+  it('requires an authenticated session', async () => {
+    const response = await request(app).post('/api/auth/change-password').send({
+      currentPassword: 'correct-horse',
+      newPassword: 'new-correct-horse',
+    });
+
+    expect(response.status).toBe(401);
+    expect(response.body).toEqual({ error: 'not authenticated' });
+  });
+
+  it('rejects missing or blank values without changing the stored hash', async () => {
+    const agent = request.agent(app);
+    const registration = await agent.post('/api/auth/register').send({
+      handle: 'change-invalid-user',
+      email: 'change-invalid-user@example.com',
+      password: 'correct-horse',
+    });
+    expect(registration.status).toBe(201);
+
+    const before = await prisma.user.findUniqueOrThrow({
+      where: { id: registration.body.id },
+      select: { passwordHash: true },
+    });
+    const invalidBodies = [
+      { newPassword: 'new-correct-horse' },
+      { currentPassword: 'correct-horse' },
+      { currentPassword: ' ', newPassword: 'new-correct-horse' },
+      { currentPassword: 'correct-horse', newPassword: ' ' },
+    ];
+
+    for (const body of invalidBodies) {
+      const response = await agent.post('/api/auth/change-password').send(body);
+      expect(response.status).toBe(400);
+    }
+
+    const after = await prisma.user.findUniqueOrThrow({
+      where: { id: registration.body.id },
+      select: { passwordHash: true },
+    });
+    expect(after.passwordHash).toBe(before.passwordHash);
+  });
+
+  it('rejects a wrong current password without changing the stored hash', async () => {
+    const agent = request.agent(app);
+    const registration = await agent.post('/api/auth/register').send({
+      handle: 'change-wrong-user',
+      email: 'change-wrong-user@example.com',
+      password: 'correct-horse',
+    });
+    expect(registration.status).toBe(201);
+
+    const before = await prisma.user.findUniqueOrThrow({
+      where: { id: registration.body.id },
+      select: { passwordHash: true },
+    });
+    const response = await agent.post('/api/auth/change-password').send({
+      currentPassword: 'wrong-horse',
+      newPassword: 'new-correct-horse',
+    });
+
+    expect(response.status).toBe(401);
+    expect(response.body).toEqual({ error: 'invalid current password' });
+    const after = await prisma.user.findUniqueOrThrow({
+      where: { id: registration.body.id },
+      select: { passwordHash: true },
+    });
+    expect(after.passwordHash).toBe(before.passwordHash);
+  });
+
+  it('changes only the authenticated user password and keeps the session usable', async () => {
+    const agent = request.agent(app);
+    const otherAgent = request.agent(app);
+    const registration = await agent.post('/api/auth/register').send({
+      handle: 'change-success-user',
+      email: 'change-success-user@example.com',
+      password: 'correct-horse',
+    });
+    const otherRegistration = await otherAgent.post('/api/auth/register').send({
+      handle: 'change-other-user',
+      email: 'change-other-user@example.com',
+      password: 'other-correct-horse',
+    });
+    expect(registration.status).toBe(201);
+    expect(otherRegistration.status).toBe(201);
+
+    const before = await prisma.user.findMany({
+      where: { id: { in: [registration.body.id, otherRegistration.body.id] } },
+      select: { id: true, passwordHash: true },
+    });
+    const beforeById = new Map(before.map((user) => [user.id, user.passwordHash]));
+
+    const response = await agent.post('/api/auth/change-password').send({
+      currentPassword: 'correct-horse',
+      newPassword: 'new-correct-horse',
+    });
+    expect(response.status).toBe(204);
+    expect(response.text).toBe('');
+    expect(response.body.passwordHash).toBeUndefined();
+
+    const me = await agent.get('/api/me');
+    expect(me.status).toBe(200);
+    expect(me.body).toMatchObject({ handle: 'change-success-user' });
+    expect(me.body.password).toBeUndefined();
+    expect(me.body.passwordHash).toBeUndefined();
+
+    const after = await prisma.user.findMany({
+      where: { id: { in: [registration.body.id, otherRegistration.body.id] } },
+      select: { id: true, passwordHash: true },
+    });
+    const afterById = new Map(after.map((user) => [user.id, user.passwordHash]));
+    expect(afterById.get(registration.body.id)).not.toBe(beforeById.get(registration.body.id));
+    expect(afterById.get(otherRegistration.body.id)).toBe(beforeById.get(otherRegistration.body.id));
+
+    const oldLogin = await request(app).post('/api/auth/login').send({
+      identifier: 'change-success-user',
+      password: 'correct-horse',
+    });
+    expect(oldLogin.status).toBe(401);
+    expect(oldLogin.body.passwordHash).toBeUndefined();
+
+    const newLogin = await request(app).post('/api/auth/login').send({
+      identifier: 'change-success-user',
+      password: 'new-correct-horse',
+    });
+    expect(newLogin.status).toBe(200);
+    expect(newLogin.body.password).toBeUndefined();
+    expect(newLogin.body.passwordHash).toBeUndefined();
+  });
+});
+
 describe('email activation', () => {
   it('activates a valid token, exposes verification state, and rejects reuse', async () => {
     const agent = request.agent(app);
