@@ -133,7 +133,7 @@ describe('Settings', () => {
       currentPassword: 'old-pass',
       newEmail: 'new@example.com',
     });
-    expect(container.textContent).toContain('Confirmation link sent to new@example.com.');
+    expect(container.textContent).toContain('Email change pending. Check new@example.com');
     expect((container.querySelector('#email-current-password') as HTMLInputElement).value).toBe('');
     expect((container.querySelector('#new-email') as HTMLInputElement).value).toBe('');
     expect((container.querySelector('#confirm-email') as HTMLInputElement).value).toBe('');

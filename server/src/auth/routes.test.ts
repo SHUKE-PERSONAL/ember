@@ -608,7 +608,8 @@ describe('email change', () => {
     expect(replaced.status).toBe(400);
     expect(replaced.body).toEqual({ error: 'invalid or expired email change token' });
 
-    const confirmed = await agent.post('/api/auth/confirm-email-change').send({ token: second.token });
+    const confirmed = await request(app).post('/api/auth/confirm-email-change')
+      .send({ token: second.token });
     expect(confirmed.status).toBe(200);
     expect(confirmed.body).toMatchObject({
       id: registration.body.id,

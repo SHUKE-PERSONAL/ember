@@ -112,8 +112,9 @@ export function Settings({ user, logout }: { user: User; logout: () => void }) {
       setNewEmail('');
       setEmailConfirmation('');
       setEmailMessage(
-        'Email change pending. Confirmation link sent to ' + requestedEmail
-          + '. Your current email stays active until you confirm it.',
+        'Email change pending. Check ' + requestedEmail
+          + ' for a confirmation link, or check the server log when running locally without mail delivery.'
+          + ' Your current email stays active until you confirm it.',
       );
     } catch (err) {
       setEmailError(errorMessage(err, 'Could not change email.'));
