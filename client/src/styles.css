@@ -257,6 +257,88 @@ button.more {
   color: inherit;
 }
 
+.api-keys {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.api-key-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 30rem;
+  margin-top: 1rem;
+}
+
+.api-key-form input,
+.api-key-secret-value {
+  box-sizing: border-box;
+  width: 100%;
+  font: inherit;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: inherit;
+}
+
+.api-key-secret {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding: 0.75rem;
+  border: 1px solid var(--accent);
+  border-radius: 0.5rem;
+}
+
+.api-key-secret h4,
+.api-key-secret p {
+  margin: 0;
+}
+
+.api-key-secret-value {
+  font-family: ui-monospace, monospace;
+}
+
+.api-key-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+
+.api-key-row {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+
+.api-key-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.api-key-details span {
+  color: var(--muted);
+  font-size: 0.9em;
+  overflow-wrap: anywhere;
+}
+
+.api-key-revoke {
+  flex: 0 0 auto;
+  background: transparent;
+  color: var(--accent);
+}
+
 .search-users {
   display: flex;
   flex-direction: column;

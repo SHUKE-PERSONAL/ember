@@ -12,6 +12,29 @@ export interface User {
   createdAt: string;
 }
 
+export interface ApiKeyMetadata {
+  id: string;
+  name: string;
+  scopes: string;
+  expiresAt: string | null;
+  lastUsedAt: string | null;
+  createdAt: string;
+}
+
+export interface ApiKeyList {
+  apiKeys: ApiKeyMetadata[];
+}
+
+export interface CreatedApiKey extends ApiKeyMetadata {
+  key: string;
+}
+
+export interface CreateApiKeyInput {
+  name: string;
+  scopes?: string;
+  expiresAt?: string;
+}
+
 export interface Profile {
   id: string;
   handle: string;
@@ -109,6 +132,21 @@ function userPath(handle: string) {
   return `/api/users/${encodeURIComponent(handle)}`;
 }
 
+interface ApiKeyResponse extends ApiKeyMetadata {
+  [field: string]: unknown;
+}
+
+function projectApiKeyMetadata(apiKey: ApiKeyResponse): ApiKeyMetadata {
+  return {
+    id: apiKey.id,
+    name: apiKey.name,
+    scopes: apiKey.scopes,
+    expiresAt: apiKey.expiresAt,
+    lastUsedAt: apiKey.lastUsedAt,
+    createdAt: apiKey.createdAt,
+  };
+}
+
 export class ApiError extends Error {
   constructor(public status: number, message: string, public body?: unknown) {
     super(message);
@@ -149,6 +187,19 @@ export const api = {
     request<User>('/api/auth/login', { method: 'POST', body: JSON.stringify(body) }),
   changePassword: (body: { currentPassword: string; newPassword: string }) =>
     request<void>('/api/auth/change-password', { method: 'POST', body: JSON.stringify(body) }),
+  apiKeys: async (): Promise<ApiKeyList> => {
+    const response = await request<{ apiKeys: ApiKeyResponse[] }>('/api/apikeys');
+    return { apiKeys: response.apiKeys.map(projectApiKeyMetadata) };
+  },
+  createApiKey: async (body: CreateApiKeyInput): Promise<CreatedApiKey> => {
+    const response = await request<ApiKeyResponse & { key: string }>('/api/apikeys', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+    return { ...projectApiKeyMetadata(response), key: response.key };
+  },
+  revokeApiKey: (id: string) =>
+    request<void>(`/api/apikeys/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   logout: () => request<void>('/api/auth/logout', { method: 'POST' }),
   createPost: (text: string) =>
     request<Post>('/api/posts', { method: 'POST', body: JSON.stringify({ text }) }),
