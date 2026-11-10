@@ -218,6 +218,7 @@ describe('activation route', () => {
   it('shows Settings in the signed-in main navigation and renders the protected route', async () => {
     const me = vi.spyOn(api, 'me').mockResolvedValue(user);
     vi.spyOn(api, 'timeline').mockResolvedValue({ posts: [], nextCursor: null });
+    vi.spyOn(api, 'apiKeys').mockResolvedValue({ apiKeys: [] });
     const container = document.createElement('div');
     document.body.append(container);
 

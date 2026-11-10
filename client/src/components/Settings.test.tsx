@@ -3,7 +3,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, api } from '../api';
+import { ApiError, api, type ApiKeyList } from '../api';
 import { Settings } from './Settings';
 
 const user = {
@@ -28,11 +28,13 @@ describe('Settings', () => {
   afterEach(() => {
     act(() => root?.unmount());
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
-  function renderSettings() {
+  function renderSettings(apiKeys: Promise<ApiKeyList> = Promise.resolve({ apiKeys: [] })) {
     const container = document.createElement('div');
     document.body.append(container);
+    vi.spyOn(api, 'apiKeys').mockReturnValue(apiKeys);
     act(() => {
       root = createRoot(container);
       root.render(<Settings user={user} logout={vi.fn()} />);
@@ -93,6 +95,148 @@ describe('Settings', () => {
 
     expect(container.textContent).toContain('invalid current password');
     expect(container.querySelector('form.settings-form')).not.toBeNull();
+    container.remove();
+  });
+
+  it('loads and renders only masked API-key metadata', async () => {
+    const apiKeys = Promise.resolve({
+      apiKeys: [{
+        id: 'key-id',
+        name: 'HappyNotes sync',
+        scopes: 'posts:write',
+        expiresAt: '2027-01-01T00:00:00.000Z',
+        lastUsedAt: null,
+        createdAt: '2026-08-22T00:00:00.000Z',
+      }],
+    });
+    const container = renderSettings(apiKeys);
+    expect(container.textContent).toContain('Loading API keys…');
+
+    await act(async () => {
+      await apiKeys;
+    });
+
+    expect(container.textContent).toContain('HappyNotes sync');
+    expect(container.textContent).toContain('posts:write');
+    expect(container.querySelector('.api-key-list')).not.toBeNull();
+    container.remove();
+  });
+
+  it('rejects an empty API-key name before calling the API', async () => {
+    const createApiKey = vi.spyOn(api, 'createApiKey');
+    const container = renderSettings();
+
+    await act(async () => {
+      container.querySelector('form.api-key-form')?.dispatchEvent(
+        new Event('submit', { bubbles: true, cancelable: true }),
+      );
+    });
+
+    expect(createApiKey).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('API key name is required.');
+    container.remove();
+  });
+
+  it('shows and then dismisses the plaintext key without adding it to the list', async () => {
+    const createApiKey = vi.spyOn(api, 'createApiKey').mockResolvedValue({
+      id: 'created-key',
+      name: 'Agent sync',
+      scopes: 'posts:write',
+      expiresAt: null,
+      lastUsedAt: null,
+      createdAt: '2026-08-22T00:00:00.000Z',
+      key: 'emb_one-time-secret',
+    });
+    const container = renderSettings();
+
+    await act(async () => {
+      setInputValue(container.querySelector('#api-key-name') as HTMLInputElement, 'Agent sync');
+      setInputValue(container.querySelector('#api-key-scopes') as HTMLInputElement, 'posts:write');
+      setInputValue(container.querySelector('#api-key-expires-at') as HTMLInputElement, '2027-01-01T12:00');
+      container.querySelector('form.api-key-form')?.dispatchEvent(
+        new Event('submit', { bubbles: true, cancelable: true }),
+      );
+      await Promise.resolve();
+    });
+
+    expect(createApiKey).toHaveBeenCalledWith({
+      name: 'Agent sync',
+      scopes: 'posts:write',
+      expiresAt: '2027-01-01T12:00',
+    });
+    expect((container.querySelector('.api-key-secret-value') as HTMLInputElement).value)
+      .toBe('emb_one-time-secret');
+    expect(container.textContent).toContain('API key created. Copy the secret now; it will not be shown again.');
+    expect(container.querySelector('.api-key-list')?.textContent).not.toContain('emb_one-time-secret');
+
+    const dismiss = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Dismiss secret'));
+    act(() => dismiss?.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    expect(container.querySelector('.api-key-secret-value')).toBeNull();
+    expect(container.textContent).not.toContain('emb_one-time-secret');
+    container.remove();
+  });
+
+  it('confirms and removes a listed key after successful revocation', async () => {
+    const listed = Promise.resolve({
+      apiKeys: [{
+        id: 'key-id',
+        name: 'Agent sync',
+        scopes: '',
+        expiresAt: null,
+        lastUsedAt: null,
+        createdAt: '2026-08-22T00:00:00.000Z',
+      }],
+    });
+    const revokeApiKey = vi.spyOn(api, 'revokeApiKey').mockResolvedValue(undefined);
+    const confirm = vi.fn().mockReturnValue(true);
+    vi.stubGlobal('confirm', confirm);
+    const container = renderSettings(listed);
+
+    await act(async () => {
+      await listed;
+    });
+    const revoke = container.querySelector('button.api-key-revoke');
+    await act(async () => {
+      revoke?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(confirm).toHaveBeenCalledWith('Revoke the API key “Agent sync”?');
+    expect(revokeApiKey).toHaveBeenCalledWith('key-id');
+    expect(container.querySelector('.api-key-list')).toBeNull();
+    expect(container.textContent).toContain('No API keys yet.');
+    container.remove();
+  });
+
+  it('keeps the listed key and shows a safe error when revocation fails', async () => {
+    const listed = Promise.resolve({
+      apiKeys: [{
+        id: 'key-id',
+        name: 'Agent sync',
+        scopes: '',
+        expiresAt: null,
+        lastUsedAt: null,
+        createdAt: '2026-08-22T00:00:00.000Z',
+      }],
+    });
+    vi.spyOn(api, 'revokeApiKey').mockRejectedValue(new ApiError(404, 'API key not found'));
+    const confirm = vi.fn().mockReturnValue(true);
+    vi.stubGlobal('confirm', confirm);
+    const container = renderSettings(listed);
+
+    await act(async () => {
+      await listed;
+    });
+    await act(async () => {
+      container.querySelector('button.api-key-revoke')?.dispatchEvent(
+        new MouseEvent('click', { bubbles: true }),
+      );
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('.api-key-list')).not.toBeNull();
+    expect(container.textContent).toContain('API key not found');
     container.remove();
   });
 });
