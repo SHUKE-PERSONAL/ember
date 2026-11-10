@@ -10,7 +10,10 @@ import {
   createVerificationToken,
   hashVerificationToken,
 } from './verification.js';
-import { sendActivationEmail } from '../mail/index.js';
+import {
+  ActivationEmailUnavailableError,
+  sendActivationEmail,
+} from '../mail/index.js';
 
 export const authRouter = Router();
 
@@ -59,10 +62,13 @@ authRouter.post('/auth/register', asyncHandler(async (req: Request, res: Respons
       select: publicUser,
     });
     const token = await issueActivationToken(user.id);
-    await sendActivationEmail(user.email, activationLink(token));
+    const emailDelivery = await sendActivationEmail(user.email, activationLink(token));
     req.session.userId = user.id;
-    return res.status(201).json(user);
+    return res.status(201).json({ ...user, emailDelivery });
   } catch (err) {
+    if (err instanceof ActivationEmailUnavailableError) {
+      return res.status(503).json({ error: 'activation email unavailable' });
+    }
     // Unique constraint (handle or email already taken).
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
       return res.status(409).json({ error: 'handle or email already in use' });
@@ -117,7 +123,7 @@ authRouter.post('/auth/resend-activation', requireAuth, asyncHandler(async (req:
     req.session.destroy(() => {});
     return res.status(401).json({ error: 'not authenticated' });
   }
-  if (user.emailVerifiedAt) return res.json(user);
+  if (user.emailVerifiedAt) return res.json({ ...user, emailDelivery: 'not-needed' });
 
   const now = Date.now();
   const lastSentAt = resendAtByUser.get(user.id);
@@ -130,8 +136,16 @@ authRouter.post('/auth/resend-activation', requireAuth, asyncHandler(async (req:
 
   resendAtByUser.set(user.id, now);
   const token = await issueActivationToken(user.id);
-  await sendActivationEmail(user.email, activationLink(token));
-  return res.json(user);
+  try {
+    const emailDelivery = await sendActivationEmail(user.email, activationLink(token));
+    return res.json({ ...user, emailDelivery });
+  } catch (err) {
+    if (err instanceof ActivationEmailUnavailableError) {
+      resendAtByUser.delete(user.id);
+      return res.status(503).json({ error: 'activation email unavailable' });
+    }
+    throw err;
+  }
 }));
 
 authRouter.post('/auth/login', asyncHandler(async (req: Request, res: Response) => {

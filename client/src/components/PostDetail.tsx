@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react';
-import { api, ApiError, type Post, type User } from '../api';
+import {
+  activationDeliveryMessage,
+  api,
+  ApiError,
+  type Post,
+  type User,
+} from '../api';
 import { graphemeCount, MAX_GRAPHEMES, SOFT_LIMIT } from '../lib/grapheme';
 import { useAuth } from './AuthGate';
 import { PostItem } from './PostItem';
@@ -79,8 +85,8 @@ export function PostDetail({
     setError(null);
     setResendMessage(null);
     try {
-      await api.resendActivation();
-      setResendMessage('Activation email sent.');
+      const response = await api.resendActivation();
+      setResendMessage(activationDeliveryMessage(response.emailDelivery));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'could not resend activation email');
     } finally {

@@ -1,5 +1,11 @@
 import { useState } from 'react';
-import { api, ApiError, type Post, type User } from '../api';
+import {
+  activationDeliveryMessage,
+  api,
+  ApiError,
+  type Post,
+  type User,
+} from '../api';
 import { graphemeCount, SOFT_LIMIT, MAX_GRAPHEMES } from '../lib/grapheme';
 
 // Compose box with a live grapheme counter. 140 is a soft hint (the counter
@@ -23,8 +29,8 @@ export function Compose({ user, onPosted }: { user: User; onPosted: (post: Post)
     setError(null);
     setMessage(null);
     try {
-      await api.resendActivation();
-      setMessage('Activation email sent.');
+      const response = await api.resendActivation();
+      setMessage(activationDeliveryMessage(response.emailDelivery));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'could not resend activation email');
     } finally {

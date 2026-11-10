@@ -12,6 +12,20 @@ export interface User {
   createdAt: string;
 }
 
+export type ActivationEmailDelivery = 'sent' | 'logged' | 'not-needed';
+
+export interface ActivationEmailResponse extends User {
+  emailDelivery: ActivationEmailDelivery;
+}
+
+export function activationDeliveryMessage(delivery: ActivationEmailDelivery, email?: string) {
+  if (delivery === 'logged') {
+    return 'Activation link logged for development; check the server logs.';
+  }
+  if (delivery === 'not-needed') return 'Your email is already verified.';
+  return email ? `We sent an activation link to ${email}.` : 'Activation email sent.';
+}
+
 export interface ApiKeyMetadata {
   id: string;
   name: string;
@@ -178,11 +192,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   me: () => request<User>('/api/me'),
   register: (body: { handle: string; displayName?: string; email: string; password: string }) =>
-    request<User>('/api/auth/register', { method: 'POST', body: JSON.stringify(body) }),
+    request<ActivationEmailResponse>('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   activate: (token: string) =>
     request<User>('/api/auth/activate', { method: 'POST', body: JSON.stringify({ token }) }),
   resendActivation: () =>
-    request<User>('/api/auth/resend-activation', { method: 'POST' }),
+    request<ActivationEmailResponse>('/api/auth/resend-activation', { method: 'POST' }),
   login: (body: { identifier: string; password: string }) =>
     request<User>('/api/auth/login', { method: 'POST', body: JSON.stringify(body) }),
   changePassword: (body: { currentPassword: string; newPassword: string }) =>

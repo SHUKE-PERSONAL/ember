@@ -58,6 +58,7 @@ describe('Compose', () => {
     const resend = vi.spyOn(api, 'resendActivation').mockResolvedValue({
       ...user,
       emailVerifiedAt: null,
+      emailDelivery: 'sent',
     });
     const container = document.createElement('div');
 
@@ -73,5 +74,47 @@ describe('Compose', () => {
     });
     expect(resend).toHaveBeenCalledOnce();
     expect(container.textContent).toContain('Activation email sent.');
+  });
+
+  it('identifies a development-only logged activation link', async () => {
+    vi.spyOn(api, 'resendActivation').mockResolvedValue({
+      ...user,
+      emailVerifiedAt: null,
+      emailDelivery: 'logged',
+    });
+    const container = document.createElement('div');
+
+    await act(async () => {
+      root = createRoot(container);
+      root.render(<Compose user={{ ...user, emailVerifiedAt: null }} onPosted={vi.fn()} />);
+    });
+
+    await act(async () => {
+      container.querySelector('button')?.click();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('Activation link logged for development; check the server logs.');
+    expect(container.textContent).not.toContain('Activation email sent.');
+  });
+
+  it('shows a delivery failure without a success message', async () => {
+    vi.spyOn(api, 'resendActivation').mockRejectedValue(
+      new ApiError(503, 'activation email unavailable', { error: 'activation email unavailable' }),
+    );
+    const container = document.createElement('div');
+
+    await act(async () => {
+      root = createRoot(container);
+      root.render(<Compose user={{ ...user, emailVerifiedAt: null }} onPosted={vi.fn()} />);
+    });
+
+    await act(async () => {
+      container.querySelector('button')?.click();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('activation email unavailable');
+    expect(container.textContent).not.toContain('Activation email sent.');
   });
 });

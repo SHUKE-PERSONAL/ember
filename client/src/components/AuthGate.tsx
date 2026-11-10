@@ -6,7 +6,13 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { api, ApiError, type User } from '../api';
+import {
+  activationDeliveryMessage,
+  api,
+  ApiError,
+  type ActivationEmailResponse,
+  type User,
+} from '../api';
 
 interface AuthContextValue {
   user: User | null;
@@ -47,6 +53,7 @@ export function AuthGate({
   const [showAuth, setShowAuth] = useState(false);
   const [browsing, setBrowsing] = useState(false);
   const [activationPending, setActivationPending] = useState(false);
+  const [activationDelivery, setActivationDelivery] = useState<ActivationEmailResponse['emailDelivery'] | null>(null);
 
   const openAuth = useCallback(() => setShowAuth(true), []);
   const browse = useCallback(() => {
@@ -67,6 +74,7 @@ export function AuthGate({
       setShowAuth(false);
       setBrowsing(true);
       setActivationPending(false);
+      setActivationDelivery(null);
     });
   }, []);
 
@@ -80,6 +88,7 @@ export function AuthGate({
       }}
       onRegistered={(registered) => {
         setActivationPending(!registered.emailVerifiedAt);
+        setActivationDelivery(registered.emailDelivery);
         setUser(registered);
       }}
       onBrowse={browse}
@@ -92,7 +101,13 @@ export function AuthGate({
   if (!user && !browsing && unauthenticated) return unauthenticated(openAuth, browse);
   if (!user && !browsing) return authForm;
   if (user && activationPending && !user.emailVerifiedAt) {
-    return <ActivationPending user={user} logout={logout} />;
+    return (
+      <ActivationPending
+        user={user}
+        emailDelivery={activationDelivery ?? 'sent'}
+        logout={logout}
+      />
+    );
   }
   return (
     <AuthProvider user={user} showAuth={openAuth}>
@@ -101,7 +116,15 @@ export function AuthGate({
   );
 }
 
-function ActivationPending({ user, logout }: { user: User; logout: () => void }) {
+function ActivationPending({
+  user,
+  emailDelivery,
+  logout,
+}: {
+  user: User;
+  emailDelivery: ActivationEmailResponse['emailDelivery'];
+  logout: () => void;
+}) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -111,8 +134,8 @@ function ActivationPending({ user, logout }: { user: User; logout: () => void })
     setMessage(null);
     setError(null);
     try {
-      await api.resendActivation();
-      setMessage('Activation email sent.');
+      const response = await api.resendActivation();
+      setMessage(activationDeliveryMessage(response.emailDelivery));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'could not resend activation email');
     } finally {
@@ -123,7 +146,7 @@ function ActivationPending({ user, logout }: { user: User; logout: () => void })
   return (
     <main className="auth">
       <h2>Check your email</h2>
-      <p>We sent an activation link to {user.email}.</p>
+      <p>{activationDeliveryMessage(emailDelivery, user.email)}</p>
       {message && <p className="muted">{message}</p>}
       {error && <p className="error">{error}</p>}
       <button type="button" onClick={resend} disabled={busy}>
@@ -142,7 +165,7 @@ export function AuthForm({
   onBrowse,
 }: {
   onAuthed: (u: User) => void;
-  onRegistered?: (u: User) => void;
+  onRegistered?: (u: ActivationEmailResponse) => void;
   onBrowse?: () => void;
 }) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -158,12 +181,14 @@ export function AuthForm({
     setBusy(true);
     setError(null);
     try {
-      const user =
-        mode === 'login'
-          ? await api.login({ identifier, password })
-          : await api.register({ handle, email, password });
-      if (mode === 'register' && onRegistered) onRegistered(user);
-      else onAuthed(user);
+      if (mode === 'register') {
+        const registered = await api.register({ handle, email, password });
+        if (onRegistered) onRegistered(registered);
+        else onAuthed(registered);
+      } else {
+        const authenticated = await api.login({ identifier, password });
+        onAuthed(authenticated);
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'something went wrong');
     } finally {
