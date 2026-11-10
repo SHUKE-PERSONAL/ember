@@ -11,6 +11,7 @@ vi.mock('resend', () => ({
 import {
   ActivationEmailUnavailableError,
   sendActivationEmail,
+  sendEmailChangeEmail,
 } from './index.js';
 
 describe('sendActivationEmail', () => {
@@ -95,6 +96,28 @@ describe('sendActivationEmail', () => {
       resendSend.mockRejectedValueOnce(new Error('provider request failed'));
       await expect(sendActivationEmail('reader@example.com', 'http://localhost/activate?token=raw'))
         .rejects.toEqual(new ActivationEmailUnavailableError());
+    } finally {
+      if (previousApiKey === undefined) delete process.env.RESEND_API_KEY;
+      else process.env.RESEND_API_KEY = previousApiKey;
+    }
+  });
+
+  it('uses the shared delivery path for email-change confirmation mail', async () => {
+    const previousApiKey = process.env.RESEND_API_KEY;
+    process.env.RESEND_API_KEY = 'resend-test-key';
+    resendSend.mockResolvedValueOnce({ data: { id: 'email-change-id' }, error: null });
+
+    try {
+      await expect(sendEmailChangeEmail(
+        'new-reader@example.com',
+        'http://localhost/confirm-email-change?token=raw',
+      )).resolves.toBe('sent');
+      expect(resendSend).toHaveBeenCalledWith({
+        from: 'noreply@mail.shukelabs.com',
+        to: ['new-reader@example.com'],
+        subject: 'Confirm your Ember email change',
+        text: expect.stringContaining('http://localhost/confirm-email-change?token=raw'),
+      });
     } finally {
       if (previousApiKey === undefined) delete process.env.RESEND_API_KEY;
       else process.env.RESEND_API_KEY = previousApiKey;

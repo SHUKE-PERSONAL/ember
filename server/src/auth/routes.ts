@@ -12,6 +12,7 @@ import {
 } from './verification.js';
 import {
   ActivationEmailUnavailableError,
+  sendEmailChangeEmail,
   sendActivationEmail,
 } from '../mail/index.js';
 
@@ -24,9 +25,17 @@ function isNonEmptyString(v: unknown): v is string {
   return typeof v === 'string' && v.trim().length > 0;
 }
 
-function activationLink(token: string) {
+function appLink(path: string, token: string) {
   const appUrl = (process.env.APP_URL?.trim() || 'http://localhost:5173').replace(/\/+$/, '');
-  return `${appUrl}/activate?token=${encodeURIComponent(token)}`;
+  return `${appUrl}${path}?token=${encodeURIComponent(token)}`;
+}
+
+function activationLink(token: string) {
+  return appLink('/activate', token);
+}
+
+function emailChangeLink(token: string) {
+  return appLink('/confirm-email-change', token);
 }
 
 async function issueActivationToken(userId: string) {
@@ -42,6 +51,23 @@ async function issueActivationToken(userId: string) {
     }),
   ]);
   return token;
+}
+
+async function issuePendingEmailChange(userId: string, pendingEmail: string) {
+  const token = createVerificationToken();
+  const tokenHash = hashVerificationToken(token);
+  const pending = await prisma.$transaction(async (tx) => {
+    await tx.pendingEmailChange.deleteMany({ where: { userId } });
+    return tx.pendingEmailChange.create({
+      data: {
+        userId,
+        pendingEmail,
+        tokenHash,
+        expiresAt: new Date(Date.now() + ACTIVATION_TOKEN_TTL_MS),
+      },
+    });
+  });
+  return { pending, token };
 }
 
 authRouter.post('/auth/register', asyncHandler(async (req: Request, res: Response) => {
@@ -190,6 +216,123 @@ authRouter.post('/auth/change-password', requireAuth, asyncHandler(async (req: R
     data: { passwordHash: await hashPassword(newPassword) },
   });
   return res.status(204).end();
+}));
+
+authRouter.post('/auth/change-email', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+  const { currentPassword, newEmail } = req.body ?? {};
+  if (!isNonEmptyString(currentPassword) || !isNonEmptyString(newEmail)) {
+    return res.status(400).json({ error: 'currentPassword and newEmail are required' });
+  }
+
+  const userId = req.session.userId!;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true, passwordHash: true },
+  });
+  if (!user) {
+    req.session.destroy(() => {});
+    return res.status(401).json({ error: 'not authenticated' });
+  }
+  if (!(await verifyPassword(currentPassword, user.passwordHash))) {
+    return res.status(401).json({ error: 'invalid current password' });
+  }
+  if (newEmail === user.email) {
+    return res.status(400).json({ error: 'new email must be different' });
+  }
+
+  const existing = await prisma.user.findUnique({
+    where: { email: newEmail },
+    select: { id: true },
+  });
+  if (existing) {
+    return res.status(409).json({ error: 'email already in use' });
+  }
+
+  const { pending, token } = await issuePendingEmailChange(userId, newEmail);
+  try {
+    await sendEmailChangeEmail(newEmail, emailChangeLink(token));
+  } catch (err) {
+    if (err instanceof ActivationEmailUnavailableError) {
+      // Delete only this request's row. A concurrent replacement may already
+      // have installed a newer token for the same user.
+      await prisma.pendingEmailChange.deleteMany({
+        where: { id: pending.id, tokenHash: pending.tokenHash },
+      });
+      return res.status(503).json({ error: 'activation email unavailable' });
+    }
+    throw err;
+  }
+
+  return res.status(202).json({ status: 'pending' });
+}));
+
+authRouter.post('/auth/confirm-email-change', asyncHandler(async (req: Request, res: Response) => {
+  const { token } = req.body ?? {};
+  if (!isNonEmptyString(token)) {
+    return res.status(400).json({ error: 'token is required' });
+  }
+
+  const pendingToken = await prisma.pendingEmailChange.findUnique({
+    where: { tokenHash: hashVerificationToken(token) },
+    select: { id: true },
+  });
+  if (!pendingToken) {
+    return res.status(400).json({ error: 'invalid or expired email change token' });
+  }
+
+  try {
+    const outcome = await prisma.$transaction(async (tx) => {
+      const pending = await tx.pendingEmailChange.findUnique({
+        where: { id: pendingToken.id },
+      });
+      if (!pending || pending.expiresAt.getTime() <= Date.now()) {
+        if (pending) {
+          await tx.pendingEmailChange.deleteMany({
+            where: { id: pending.id, tokenHash: pending.tokenHash },
+          });
+        }
+        return { status: 'invalid' as const };
+      }
+
+      const owner = await tx.user.findUnique({
+        where: { email: pending.pendingEmail },
+        select: { id: true },
+      });
+      if (owner && owner.id !== pending.userId) {
+        return { status: 'conflict' as const };
+      }
+
+      const consumed = await tx.pendingEmailChange.deleteMany({
+        where: { id: pending.id, tokenHash: pending.tokenHash },
+      });
+      if (consumed.count !== 1) {
+        return { status: 'invalid' as const };
+      }
+
+      const confirmed = await tx.user.update({
+        where: { id: pending.userId },
+        data: {
+          email: pending.pendingEmail,
+          emailVerifiedAt: new Date(),
+        },
+        select: publicUser,
+      });
+      return { status: 'confirmed' as const, user: confirmed };
+    });
+
+    if (outcome.status === 'conflict') {
+      return res.status(409).json({ error: 'email already in use' });
+    }
+    if (outcome.status === 'invalid') {
+      return res.status(400).json({ error: 'invalid or expired email change token' });
+    }
+    return res.json(outcome.user);
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      return res.status(409).json({ error: 'email already in use' });
+    }
+    throw err;
+  }
 }));
 
 authRouter.post('/auth/logout', (req: Request, res: Response) => {

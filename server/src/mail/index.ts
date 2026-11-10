@@ -22,13 +22,30 @@ function activationMessage(link: string) {
   ].join('\n');
 }
 
-export async function sendActivationEmail(to: string, link: string): Promise<ActivationEmailDelivery> {
+function emailChangeMessage(link: string) {
+  return [
+    'You requested an email change for your Ember account.',
+    '',
+    'Confirm your new email address by opening this link:',
+    link,
+    '',
+    'This link expires in 24 hours.',
+  ].join('\n');
+}
+
+async function sendMail(
+  to: string,
+  subject: string,
+  text: string,
+  link: string,
+  logLabel: string,
+): Promise<ActivationEmailDelivery> {
   const apiKey = process.env.RESEND_API_KEY?.trim();
   if (!apiKey) {
     if (process.env.NODE_ENV === 'production') {
       throw new ActivationEmailUnavailableError();
     }
-    console.info(`[ember] activation link for ${to}: ${link}`);
+    console.info(`[ember] ${logLabel} link for ${to}: ${link}`);
     return 'logged';
   }
 
@@ -37,8 +54,8 @@ export async function sendActivationEmail(to: string, link: string): Promise<Act
     const { error } = await resend.emails.send({
       from: process.env.MAIL_FROM?.trim() || DEFAULT_MAIL_FROM,
       to: [to],
-      subject: 'Activate your Ember account',
-      text: activationMessage(link),
+      subject,
+      text,
     });
     if (error) throw new ActivationEmailUnavailableError();
   } catch (error) {
@@ -47,4 +64,24 @@ export async function sendActivationEmail(to: string, link: string): Promise<Act
   }
 
   return 'sent';
+}
+
+export function sendActivationEmail(to: string, link: string): Promise<ActivationEmailDelivery> {
+  return sendMail(
+    to,
+    'Activate your Ember account',
+    activationMessage(link),
+    link,
+    'activation',
+  );
+}
+
+export function sendEmailChangeEmail(to: string, link: string): Promise<ActivationEmailDelivery> {
+  return sendMail(
+    to,
+    'Confirm your Ember email change',
+    emailChangeMessage(link),
+    link,
+    'email change',
+  );
 }

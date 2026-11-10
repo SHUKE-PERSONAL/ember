@@ -13,8 +13,10 @@ import { WelcomeScreen } from './components/WelcomeScreen';
 import './styles.css';
 
 export default function App() {
-  const activationToken = getActivationToken(window.location);
-  if (activationToken !== null) return <ActivationPage token={activationToken} />;
+  const confirmation = getConfirmationRoute(window.location);
+  if (confirmation) {
+    return <ConfirmationPage kind={confirmation.kind} token={confirmation.token} />;
+  }
   return <AuthenticatedApp />;
 }
 
@@ -111,35 +113,57 @@ function AppShell({ user, logout }: { user: User | null; logout: () => void }) {
   );
 }
 
-function ActivationPage({ token }: { token: string }) {
+function ConfirmationPage({
+  kind,
+  token,
+}: {
+  kind: 'activation' | 'email-change';
+  token: string;
+}) {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
   const [continueToApp, setContinueToApp] = useState(false);
 
   useEffect(() => {
     let mounted = true;
-    api.activate(token)
+    const confirmation = kind === 'activation'
+      ? api.activate(token)
+      : api.confirmEmailChange(token);
+    confirmation
+      .then((confirmedUser) => api.me().catch(() => confirmedUser))
       .then(() => {
         if (mounted) setStatus('success');
       })
       .catch((err) => {
         if (!mounted) return;
-        setError(err instanceof ApiError ? err.message : 'could not activate your email');
+        setError(
+          err instanceof ApiError
+            ? err.message
+            : kind === 'activation'
+              ? 'could not activate your email'
+              : 'could not confirm your email change',
+        );
         setStatus('error');
       });
     return () => {
       mounted = false;
     };
-  }, [token]);
+  }, [kind, token]);
 
   if (continueToApp) return <AuthenticatedApp />;
   return (
     <main className="auth">
-      {status === 'loading' && <p>Activating your email…</p>}
+      {status === 'loading' && (
+        <p>{kind === 'activation' ? 'Activating your email…' : 'Confirming your email change…'}</p>
+      )}
       {status === 'success' && (
         <>
-          <h2>Email verified</h2>
-          <p>Your Ember account is ready.</p>
+          <h2>{kind === 'activation' ? 'Email verified' : 'Email change confirmed'}</h2>
+          <p>
+            {kind === 'activation'
+              ? 'Your Ember account is ready.'
+              : 'Your Ember account now uses the new email address.'}
+          </p>
           <button
             type="button"
             onClick={() => {
@@ -153,7 +177,7 @@ function ActivationPage({ token }: { token: string }) {
       )}
       {status === 'error' && (
         <>
-          <h2>Activation failed</h2>
+          <h2>{kind === 'activation' ? 'Activation failed' : 'Email change failed'}</h2>
           <p className="error">{error}</p>
         </>
       )}
@@ -161,9 +185,15 @@ function ActivationPage({ token }: { token: string }) {
   );
 }
 
-function getActivationToken(location: Location) {
-  if (!/^\/activate\/?$/.test(location.pathname)) return null;
-  return new URLSearchParams(location.search).get('token') ?? '';
+function getConfirmationRoute(location: Location) {
+  const token = new URLSearchParams(location.search).get('token') ?? '';
+  if (/^\/activate\/?$/.test(location.pathname)) {
+    return { kind: 'activation' as const, token };
+  }
+  if (/^\/confirm-email-change\/?$/.test(location.pathname)) {
+    return { kind: 'email-change' as const, token };
+  }
+  return null;
 }
 
 function getPostId(pathname: string) {

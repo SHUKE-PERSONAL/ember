@@ -55,6 +55,7 @@ describe('activation route', () => {
   it('activates the token and shows success', async () => {
     window.history.replaceState({}, '', '/activate?token=valid-token');
     const activate = vi.spyOn(api, 'activate').mockResolvedValue(user);
+    const me = vi.spyOn(api, 'me').mockResolvedValue(user);
     const container = document.createElement('div');
 
     await act(async () => {
@@ -64,7 +65,32 @@ describe('activation route', () => {
     });
 
     expect(activate).toHaveBeenCalledWith('valid-token');
+    expect(me).toHaveBeenCalledOnce();
     expect(container.textContent).toContain('Email verified');
+    expect(container.textContent).toContain('Continue to Ember');
+  });
+
+  it('confirms an email change through its dedicated link and refreshes the user', async () => {
+    window.history.replaceState({}, '', '/confirm-email-change?token=email-change-token');
+    const confirmEmailChange = vi.spyOn(api, 'confirmEmailChange').mockResolvedValue({
+      ...user,
+      email: 'new-writer@example.com',
+    });
+    const me = vi.spyOn(api, 'me').mockResolvedValue({
+      ...user,
+      email: 'new-writer@example.com',
+    });
+    const container = document.createElement('div');
+
+    await act(async () => {
+      root = createRoot(container);
+      root.render(<App />);
+      await Promise.resolve();
+    });
+
+    expect(confirmEmailChange).toHaveBeenCalledWith('email-change-token');
+    expect(me).toHaveBeenCalledOnce();
+    expect(container.textContent).toContain('Email change confirmed');
     expect(container.textContent).toContain('Continue to Ember');
   });
 

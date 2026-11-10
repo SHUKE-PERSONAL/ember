@@ -37,11 +37,12 @@ origin.
 Open http://localhost:5173 to browse publicly. Register and activate an account
 when you want to post, reply, like, repost, follow, or use Messages.
 Signed-in users can open Settings from the main navigation to change their
-password without ending the current session or manage API keys for external
-agents. API-key secrets are shown only in the immediate creation result; copy
-the secret before dismissing it because it cannot be recovered later. The
-Settings list shows only masked metadata, and revocation requires explicit
-confirmation.
+password or request an email change without ending the current session, or
+manage API keys for external agents. Email changes keep the current address
+active until the confirmation link is opened. API-key secrets are shown only
+in the immediate creation result; copy the secret before dismissing it because
+it cannot be recovered later. The Settings list shows only masked metadata,
+and revocation requires explicit confirmation.
 
 ### Environment
 
@@ -143,6 +144,8 @@ curl --fail --silent https://bbs.shukelabs.com/api/health
 - `POST /api/auth/register` → create and auto-login an account, then send an activation email; successful responses include `emailDelivery: "sent"` or `"logged"`
 - `POST /api/auth/login` → authenticate by email or handle
 - `POST /api/auth/change-password` → change the authenticated user's password with `{ "currentPassword": "...", "newPassword": "..." }`; returns `204 No Content`
+- `POST /api/auth/change-email` → request a verified email change with `{ "currentPassword": "...", "newEmail": "..." }`; returns `202 { "status": "pending" }` and sends a 24-hour confirmation link while the current email remains active
+- `POST /api/auth/confirm-email-change` → consume a 24-hour confirmation token with `{ "token": "..." }`; atomically updates the email, marks it verified, and returns the safe self-facing user
 - `POST /api/auth/activate` → activate an account with `{ "token": "..." }`
 - `POST /api/auth/resend-activation` → resend the authenticated user's activation email; successful delivery responses include `emailDelivery: "sent"` or `"logged"` (`"not-needed"` when already verified)
 - `GET /api/me` → the authenticated user's account, including `emailVerifiedAt`

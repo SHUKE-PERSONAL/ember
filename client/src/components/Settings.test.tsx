@@ -98,6 +98,68 @@ describe('Settings', () => {
     container.remove();
   });
 
+  it('renders the current email and rejects mismatched email confirmation locally', async () => {
+    const changeEmail = vi.spyOn(api, 'changeEmail');
+    const container = renderSettings();
+    const form = container.querySelector('form.email-change-form');
+
+    expect(container.textContent).toContain('settings-user@example.com');
+    await act(async () => {
+      setInputValue(container.querySelector('#email-current-password') as HTMLInputElement, 'old-pass');
+      setInputValue(container.querySelector('#new-email') as HTMLInputElement, 'new@example.com');
+      setInputValue(container.querySelector('#confirm-email') as HTMLInputElement, 'different@example.com');
+      form?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+
+    expect(changeEmail).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('New email addresses do not match.');
+    container.remove();
+  });
+
+  it('shows a pending email-change success and clears its form', async () => {
+    const changeEmail = vi.spyOn(api, 'changeEmail').mockResolvedValue({ status: 'pending' });
+    const container = renderSettings();
+    const form = container.querySelector('form.email-change-form');
+
+    await act(async () => {
+      setInputValue(container.querySelector('#email-current-password') as HTMLInputElement, 'old-pass');
+      setInputValue(container.querySelector('#new-email') as HTMLInputElement, 'new@example.com');
+      setInputValue(container.querySelector('#confirm-email') as HTMLInputElement, 'new@example.com');
+      form?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await Promise.resolve();
+    });
+
+    expect(changeEmail).toHaveBeenCalledWith({
+      currentPassword: 'old-pass',
+      newEmail: 'new@example.com',
+    });
+    expect(container.textContent).toContain('Confirmation link sent to new@example.com.');
+    expect((container.querySelector('#email-current-password') as HTMLInputElement).value).toBe('');
+    expect((container.querySelector('#new-email') as HTMLInputElement).value).toBe('');
+    expect((container.querySelector('#confirm-email') as HTMLInputElement).value).toBe('');
+    container.remove();
+  });
+
+  it('shows a safe email-change API error', async () => {
+    vi.spyOn(api, 'changeEmail').mockRejectedValue(
+      new ApiError(503, 'activation email unavailable'),
+    );
+    const container = renderSettings();
+    const form = container.querySelector('form.email-change-form');
+
+    await act(async () => {
+      setInputValue(container.querySelector('#email-current-password') as HTMLInputElement, 'old-pass');
+      setInputValue(container.querySelector('#new-email') as HTMLInputElement, 'new@example.com');
+      setInputValue(container.querySelector('#confirm-email') as HTMLInputElement, 'new@example.com');
+      form?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('activation email unavailable');
+    expect(container.querySelector('form.email-change-form')).not.toBeNull();
+    container.remove();
+  });
+
   it('loads and renders only masked API-key metadata', async () => {
     const apiKeys = Promise.resolve({
       apiKeys: [{

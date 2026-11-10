@@ -48,6 +48,34 @@ async function registerAndGetToken(agent: ReturnType<typeof request.agent>, data
   }
 }
 
+async function requestEmailChangeAndGetToken(
+  agent: ReturnType<typeof request.agent>,
+  data: Record<string, string>,
+) {
+  const previousApiKey = process.env.RESEND_API_KEY;
+  const previousNodeEnv = process.env.NODE_ENV;
+  delete process.env.RESEND_API_KEY;
+  process.env.NODE_ENV = 'test';
+  const log = vi.spyOn(console, 'info').mockImplementation(() => {});
+  try {
+    const response = await agent.post('/api/auth/change-email').send(data);
+    const emailLog = log.mock.calls
+      .map(([message]) => String(message))
+      .find((message) => message.includes('/confirm-email-change?token='));
+    if (!emailLog) throw new Error('email-change link was not logged');
+    const link = emailLog.slice(emailLog.indexOf('http'));
+    const token = new URL(link).searchParams.get('token');
+    if (!token) throw new Error('email-change token was not logged');
+    return { response, token };
+  } finally {
+    log.mockRestore();
+    if (previousApiKey === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = previousApiKey;
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousNodeEnv;
+  }
+}
+
 describe('POST /api/auth/login', () => {
   it('authenticates with either the registered email or handle', async () => {
     const registration = await request(app).post('/api/auth/register').send({
@@ -470,5 +498,287 @@ describe('email activation', () => {
       if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
       else process.env.NODE_ENV = previousNodeEnv;
     }
+  });
+});
+
+describe('email change', () => {
+  it('requires authentication, validates the password and address, and preserves the account', async () => {
+    const unauthenticated = await request(app).post('/api/auth/change-email').send({
+      currentPassword: 'correct-horse',
+      newEmail: 'new@example.com',
+    });
+    expect(unauthenticated.status).toBe(401);
+    expect(unauthenticated.body).toEqual({ error: 'not authenticated' });
+
+    const agent = request.agent(app);
+    const { registration } = await registerAndGetToken(agent, {
+      handle: 'email-change-validation-user',
+      email: 'email-change-validation@example.com',
+      password: 'correct-horse',
+    });
+    const otherAgent = request.agent(app);
+    await registerAndGetToken(otherAgent, {
+      handle: 'email-change-owned-user',
+      email: 'email-change-owned@example.com',
+      password: 'correct-horse',
+    });
+
+    const invalidBodies = [
+      { newEmail: 'new@example.com' },
+      { currentPassword: 'correct-horse' },
+      { currentPassword: ' ', newEmail: 'new@example.com' },
+      { currentPassword: 'correct-horse', newEmail: ' ' },
+    ];
+    for (const body of invalidBodies) {
+      const response = await agent.post('/api/auth/change-email').send(body);
+      expect(response.status).toBe(400);
+    }
+
+    const wrongPassword = await agent.post('/api/auth/change-email').send({
+      currentPassword: 'wrong-horse',
+      newEmail: 'new@example.com',
+    });
+    expect(wrongPassword.status).toBe(401);
+
+    const sameEmail = await agent.post('/api/auth/change-email').send({
+      currentPassword: 'correct-horse',
+      newEmail: 'email-change-validation@example.com',
+    });
+    expect(sameEmail.status).toBe(400);
+
+    const ownedEmail = await agent.post('/api/auth/change-email').send({
+      currentPassword: 'correct-horse',
+      newEmail: 'email-change-owned@example.com',
+    });
+    expect(ownedEmail.status).toBe(409);
+
+    const unchanged = await prisma.user.findUniqueOrThrow({
+      where: { id: registration.body.id },
+      select: { email: true, emailVerifiedAt: true },
+    });
+    expect(unchanged).toEqual({
+      email: 'email-change-validation@example.com',
+      emailVerifiedAt: null,
+    });
+    expect(await prisma.pendingEmailChange.count()).toBe(0);
+  });
+
+  it('replaces one hashed pending token, confirms atomically, and keeps the session', async () => {
+    const agent = request.agent(app);
+    const { registration, token: activationToken } = await registerAndGetToken(agent, {
+      handle: 'email-change-success-user',
+      email: 'email-change-old@example.com',
+      password: 'correct-horse',
+    });
+    const activation = await agent.post('/api/auth/activate').send({ token: activationToken });
+    expect(activation.status).toBe(200);
+    const verifiedAt = activation.body.emailVerifiedAt;
+
+    const first = await requestEmailChangeAndGetToken(agent, {
+      currentPassword: 'correct-horse',
+      newEmail: 'email-change-first@example.com',
+    });
+    expect(first.response.status).toBe(202);
+    expect(first.response.body).toEqual({ status: 'pending' });
+    const firstPending = await prisma.pendingEmailChange.findUniqueOrThrow({
+      where: { userId: registration.body.id },
+    });
+    expect(firstPending.pendingEmail).toBe('email-change-first@example.com');
+    expect(firstPending.tokenHash).toBe(hashVerificationToken(first.token));
+    expect(firstPending.tokenHash).not.toBe(first.token);
+
+    const beforeConfirmation = await prisma.user.findUniqueOrThrow({
+      where: { id: registration.body.id },
+      select: { email: true, emailVerifiedAt: true },
+    });
+    expect(beforeConfirmation).toEqual({
+      email: 'email-change-old@example.com',
+      emailVerifiedAt: new Date(verifiedAt),
+    });
+
+    const second = await requestEmailChangeAndGetToken(agent, {
+      currentPassword: 'correct-horse',
+      newEmail: 'email-change-final@example.com',
+    });
+    expect(second.response.status).toBe(202);
+    expect(await prisma.pendingEmailChange.count({ where: { userId: registration.body.id } }))
+      .toBe(1);
+
+    const replaced = await agent.post('/api/auth/confirm-email-change').send({ token: first.token });
+    expect(replaced.status).toBe(400);
+    expect(replaced.body).toEqual({ error: 'invalid or expired email change token' });
+
+    const confirmed = await agent.post('/api/auth/confirm-email-change').send({ token: second.token });
+    expect(confirmed.status).toBe(200);
+    expect(confirmed.body).toMatchObject({
+      id: registration.body.id,
+      email: 'email-change-final@example.com',
+      emailVerifiedAt: expect.any(String),
+    });
+    expect(confirmed.body.passwordHash).toBeUndefined();
+    expect(confirmed.body.token).toBeUndefined();
+    expect(new Date(confirmed.body.emailVerifiedAt).getTime()).toBeGreaterThan(
+      new Date(verifiedAt).getTime(),
+    );
+    expect(await prisma.pendingEmailChange.count({ where: { userId: registration.body.id } }))
+      .toBe(0);
+
+    const me = await agent.get('/api/me');
+    expect(me.status).toBe(200);
+    expect(me.body).toMatchObject({
+      id: registration.body.id,
+      email: 'email-change-final@example.com',
+    });
+
+    const oldLogin = await request(app).post('/api/auth/login').send({
+      identifier: 'email-change-old@example.com',
+      password: 'correct-horse',
+    });
+    expect(oldLogin.status).toBe(401);
+    const newLogin = await request(app).post('/api/auth/login').send({
+      identifier: 'email-change-final@example.com',
+      password: 'correct-horse',
+    });
+    expect(newLogin.status).toBe(200);
+    expect(newLogin.body.passwordHash).toBeUndefined();
+
+    const raceRequest = await requestEmailChangeAndGetToken(agent, {
+      currentPassword: 'correct-horse',
+      newEmail: 'email-change-race@example.com',
+    });
+    const raceResults = await Promise.all([
+      agent.post('/api/auth/confirm-email-change').send({ token: raceRequest.token }),
+      agent.post('/api/auth/confirm-email-change').send({ token: raceRequest.token }),
+    ]);
+    expect(raceResults.map((result) => result.status).sort()).toEqual([200, 400]);
+    expect(await prisma.pendingEmailChange.count({ where: { userId: registration.body.id } }))
+      .toBe(0);
+  });
+
+  it('removes only its pending record when delivery is unavailable', async () => {
+    const agent = request.agent(app);
+    const { registration } = await registerAndGetToken(agent, {
+      handle: 'email-change-mail-failure-user',
+      email: 'email-change-mail-failure-old@example.com',
+      password: 'correct-horse',
+    });
+    const previousApiKey = process.env.RESEND_API_KEY;
+    const previousNodeEnv = process.env.NODE_ENV;
+    delete process.env.RESEND_API_KEY;
+    process.env.NODE_ENV = 'production';
+
+    try {
+      const response = await agent.post('/api/auth/change-email').send({
+        currentPassword: 'correct-horse',
+        newEmail: 'email-change-mail-failure-new@example.com',
+      });
+      expect(response.status).toBe(503);
+      expect(response.body).toEqual({ error: 'activation email unavailable' });
+      expect(response.text).not.toContain('/confirm-email-change?token=');
+      expect(await prisma.pendingEmailChange.count({ where: { userId: registration.body.id } }))
+        .toBe(0);
+      await expect(prisma.user.findUniqueOrThrow({
+        where: { id: registration.body.id },
+        select: { email: true, emailVerifiedAt: true },
+      })).resolves.toEqual({ email: 'email-change-mail-failure-old@example.com', emailVerifiedAt: null });
+    } finally {
+      if (previousApiKey === undefined) delete process.env.RESEND_API_KEY;
+      else process.env.RESEND_API_KEY = previousApiKey;
+      if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousNodeEnv;
+    }
+  });
+
+  it('rejects provider failures without leaving a pending token', async () => {
+    const agent = request.agent(app);
+    const { registration } = await registerAndGetToken(agent, {
+      handle: 'email-change-provider-failure-user',
+      email: 'email-change-provider-failure-old@example.com',
+      password: 'correct-horse',
+    });
+    const previousApiKey = process.env.RESEND_API_KEY;
+    const previousNodeEnv = process.env.NODE_ENV;
+    process.env.RESEND_API_KEY = 'resend-test-key';
+    process.env.NODE_ENV = 'test';
+    resendSend.mockRejectedValueOnce(new Error('provider request failed'));
+
+    try {
+      const response = await agent.post('/api/auth/change-email').send({
+        currentPassword: 'correct-horse',
+        newEmail: 'email-change-provider-failure-new@example.com',
+      });
+      expect(response.status).toBe(503);
+      expect(response.body).toEqual({ error: 'activation email unavailable' });
+      expect(await prisma.pendingEmailChange.count({ where: { userId: registration.body.id } }))
+        .toBe(0);
+      const unchanged = await prisma.user.findUniqueOrThrow({
+        where: { id: registration.body.id },
+        select: { email: true },
+      });
+      expect(unchanged.email).toBe('email-change-provider-failure-old@example.com');
+    } finally {
+      if (previousApiKey === undefined) delete process.env.RESEND_API_KEY;
+      else process.env.RESEND_API_KEY = previousApiKey;
+      if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousNodeEnv;
+    }
+  });
+
+  it('rejects invalid, expired, reused, and conflicting confirmation tokens', async () => {
+    const agent = request.agent(app);
+    const { registration } = await registerAndGetToken(agent, {
+      handle: 'email-change-token-user',
+      email: 'email-change-token-old@example.com',
+      password: 'correct-horse',
+    });
+
+    const invalid = await agent.post('/api/auth/confirm-email-change').send({ token: 'not-a-token' });
+    expect(invalid.status).toBe(400);
+
+    const expiredRequest = await requestEmailChangeAndGetToken(agent, {
+      currentPassword: 'correct-horse',
+      newEmail: 'email-change-expired@example.com',
+    });
+    await prisma.pendingEmailChange.update({
+      where: { tokenHash: hashVerificationToken(expiredRequest.token) },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+    const expired = await agent.post('/api/auth/confirm-email-change')
+      .send({ token: expiredRequest.token });
+    expect(expired.status).toBe(400);
+    expect(expired.body).toEqual({ error: 'invalid or expired email change token' });
+    expect(await prisma.pendingEmailChange.count({ where: { userId: registration.body.id } }))
+      .toBe(0);
+
+    const conflictingRequest = await requestEmailChangeAndGetToken(agent, {
+      currentPassword: 'correct-horse',
+      newEmail: 'email-change-conflict@example.com',
+    });
+    const ownerAgent = request.agent(app);
+    await registerAndGetToken(ownerAgent, {
+      handle: 'email-change-conflict-owner',
+      email: 'email-change-conflict@example.com',
+      password: 'correct-horse',
+    });
+    const conflict = await agent.post('/api/auth/confirm-email-change')
+      .send({ token: conflictingRequest.token });
+    expect(conflict.status).toBe(409);
+    expect(conflict.body).toEqual({ error: 'email already in use' });
+    expect(await prisma.user.findUniqueOrThrow({
+      where: { id: registration.body.id },
+      select: { email: true, emailVerifiedAt: true },
+    })).toEqual({ email: 'email-change-token-old@example.com', emailVerifiedAt: null });
+
+    const finalRequest = await requestEmailChangeAndGetToken(agent, {
+      currentPassword: 'correct-horse',
+      newEmail: 'email-change-token-final@example.com',
+    });
+    const confirmed = await agent.post('/api/auth/confirm-email-change')
+      .send({ token: finalRequest.token });
+    expect(confirmed.status).toBe(200);
+    const reused = await agent.post('/api/auth/confirm-email-change')
+      .send({ token: finalRequest.token });
+    expect(reused.status).toBe(400);
+    expect(reused.body).toEqual({ error: 'invalid or expired email change token' });
   });
 });
