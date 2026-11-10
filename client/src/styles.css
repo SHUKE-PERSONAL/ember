@@ -238,6 +238,25 @@ button.more {
   color: inherit;
 }
 
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 30rem;
+  margin-top: 1rem;
+}
+
+.settings-form input {
+  box-sizing: border-box;
+  width: 100%;
+  font: inherit;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: inherit;
+}
+
 .search-users {
   display: flex;
   flex-direction: column;

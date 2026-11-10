@@ -147,6 +147,8 @@ export const api = {
     request<User>('/api/auth/resend-activation', { method: 'POST' }),
   login: (body: { identifier: string; password: string }) =>
     request<User>('/api/auth/login', { method: 'POST', body: JSON.stringify(body) }),
+  changePassword: (body: { currentPassword: string; newPassword: string }) =>
+    request<void>('/api/auth/change-password', { method: 'POST', body: JSON.stringify(body) }),
   logout: () => request<void>('/api/auth/logout', { method: 'POST' }),
   createPost: (text: string) =>
     request<Post>('/api/posts', { method: 'POST', body: JSON.stringify({ text }) }),

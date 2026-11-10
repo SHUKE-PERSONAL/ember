@@ -152,6 +152,32 @@ authRouter.post('/auth/login', asyncHandler(async (req: Request, res: Response) 
   return res.json(safe);
 }));
 
+authRouter.post('/auth/change-password', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+  const { currentPassword, newPassword } = req.body ?? {};
+  if (!isNonEmptyString(currentPassword) || !isNonEmptyString(newPassword)) {
+    return res.status(400).json({ error: 'currentPassword and newPassword are required' });
+  }
+
+  const userId = req.session.userId!;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { passwordHash: true },
+  });
+  if (!user) {
+    req.session.destroy(() => {});
+    return res.status(401).json({ error: 'not authenticated' });
+  }
+  if (!(await verifyPassword(currentPassword, user.passwordHash))) {
+    return res.status(401).json({ error: 'invalid current password' });
+  }
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash: await hashPassword(newPassword) },
+  });
+  return res.status(204).end();
+}));
+
 authRouter.post('/auth/logout', (req: Request, res: Response) => {
   req.session.destroy(() => {
     res.clearCookie('connect.sid');

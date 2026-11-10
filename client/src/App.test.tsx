@@ -214,4 +214,50 @@ describe('activation route', () => {
     expect(container.querySelector('form.auth')).toBeNull();
     expect(container.textContent).toContain(expectedText);
   });
+
+  it('shows Settings in the signed-in main navigation and renders the protected route', async () => {
+    const me = vi.spyOn(api, 'me').mockResolvedValue(user);
+    vi.spyOn(api, 'timeline').mockResolvedValue({ posts: [], nextCursor: null });
+    const container = document.createElement('div');
+    document.body.append(container);
+
+    await act(async () => {
+      root = createRoot(container);
+      root.render(<App />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(me).toHaveBeenCalledOnce();
+    expect(container.querySelector('a[href="/settings"]')?.textContent).toBe('Settings');
+
+    await act(async () => {
+      window.history.replaceState({}, '', '/settings');
+      root?.render(<App />);
+      await Promise.resolve();
+    });
+    expect(container.querySelector('form.settings-form')).not.toBeNull();
+    expect(container.querySelector('form.auth')).toBeNull();
+    container.remove();
+  });
+
+  it('sends anonymous visitors on the settings route to auth without showing controls', async () => {
+    window.history.replaceState({}, '', '/settings');
+    vi.spyOn(api, 'me').mockRejectedValue(new Error('not authenticated'));
+    const container = document.createElement('div');
+    document.body.append(container);
+
+    await act(async () => {
+      root = createRoot(container);
+      root.render(<App />);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('form.auth')).not.toBeNull();
+    expect(container.querySelector('form.settings-form')).toBeNull();
+    expect(container.textContent).toContain('Log in');
+    container.remove();
+  });
 });
