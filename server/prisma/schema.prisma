@@ -32,6 +32,7 @@ model User {
   sentMessages       Message[]           @relation("sentMessages")
   receivedMessages   Message[]           @relation("receivedMessages")
   apiKeys            ApiKey[]
+  pendingEmailChange PendingEmailChange?
 }
 
 model ApiKey {
@@ -58,6 +59,18 @@ model EmailVerification {
   createdAt DateTime @default(now())
 
   @@index([userId])
+}
+
+model PendingEmailChange {
+  id           String   @id @default(cuid())
+  user         User     @relation(fields: [userId], references: [id])
+  userId       String   @unique
+  pendingEmail String
+  tokenHash    String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([expiresAt])
 }
 
 model Post {

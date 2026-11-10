@@ -103,4 +103,41 @@ describe('API-key client wrappers', () => {
       method: 'DELETE',
     });
   });
+
+  it('requests and confirms an email change through the typed wrappers', async () => {
+    const confirmedUser = {
+      id: 'user-id',
+      handle: 'reader',
+      displayName: 'Reader',
+      email: 'new-reader@example.com',
+      bio: null,
+      emailVerifiedAt: '2026-08-22T00:00:00.000Z',
+      createdAt: '2026-08-22T00:00:00.000Z',
+    };
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ status: 'pending' }, 202))
+      .mockResolvedValueOnce(jsonResponse(confirmedUser));
+
+    await expect(api.changeEmail({
+      currentPassword: 'correct-horse',
+      newEmail: 'new-reader@example.com',
+    })).resolves.toEqual({ status: 'pending' });
+    await expect(api.confirmEmailChange('raw-token')).resolves.toEqual(confirmedUser);
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/auth/change-email', {
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      body: JSON.stringify({
+        currentPassword: 'correct-horse',
+        newEmail: 'new-reader@example.com',
+      }),
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/auth/confirm-email-change', {
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      body: JSON.stringify({ token: 'raw-token' }),
+    });
+  });
 });

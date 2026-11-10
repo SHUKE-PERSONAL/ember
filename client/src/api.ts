@@ -18,6 +18,10 @@ export interface ActivationEmailResponse extends User {
   emailDelivery: ActivationEmailDelivery;
 }
 
+export interface EmailChangeResponse {
+  status: 'pending';
+}
+
 export function activationDeliveryMessage(delivery: ActivationEmailDelivery, email?: string) {
   if (delivery === 'logged') {
     return 'Activation link logged for development; check the server logs.';
@@ -198,12 +202,22 @@ export const api = {
     }),
   activate: (token: string) =>
     request<User>('/api/auth/activate', { method: 'POST', body: JSON.stringify({ token }) }),
+  confirmEmailChange: (token: string) =>
+    request<User>('/api/auth/confirm-email-change', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    }),
   resendActivation: () =>
     request<ActivationEmailResponse>('/api/auth/resend-activation', { method: 'POST' }),
   login: (body: { identifier: string; password: string }) =>
     request<User>('/api/auth/login', { method: 'POST', body: JSON.stringify(body) }),
   changePassword: (body: { currentPassword: string; newPassword: string }) =>
     request<void>('/api/auth/change-password', { method: 'POST', body: JSON.stringify(body) }),
+  changeEmail: (body: { currentPassword: string; newEmail: string }) =>
+    request<EmailChangeResponse>('/api/auth/change-email', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   apiKeys: async (): Promise<ApiKeyList> => {
     const response = await request<{ apiKeys: ApiKeyResponse[] }>('/api/apikeys');
     return { apiKeys: response.apiKeys.map(projectApiKeyMetadata) };

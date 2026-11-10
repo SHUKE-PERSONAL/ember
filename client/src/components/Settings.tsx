@@ -17,6 +17,13 @@ export function Settings({ user, logout }: { user: User; logout: () => void }) {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [emailCurrentPassword, setEmailCurrentPassword] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [emailConfirmation, setEmailConfirmation] = useState('');
+  const [emailBusy, setEmailBusy] = useState(false);
+  const [emailMessage, setEmailMessage] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+
   const [apiKeys, setApiKeys] = useState<ApiKeyMetadata[]>([]);
   const [apiKeysLoading, setApiKeysLoading] = useState(true);
   const [apiKeysLoadError, setApiKeysLoadError] = useState<string | null>(null);
@@ -75,6 +82,44 @@ export function Settings({ user, logout }: { user: User; logout: () => void }) {
       setError(errorMessage(err, 'Could not change password.'));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const submitEmail = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (emailBusy) return;
+    setEmailMessage(null);
+    setEmailError(null);
+
+    const requestedEmail = newEmail.trim();
+    if (!emailCurrentPassword.trim() || !requestedEmail) {
+      setEmailError('Current password and new email are required.');
+      return;
+    }
+    if (requestedEmail === user.email) {
+      setEmailError('New email must be different from the current email.');
+      return;
+    }
+    if (requestedEmail !== emailConfirmation.trim()) {
+      setEmailError('New email addresses do not match.');
+      return;
+    }
+
+    setEmailBusy(true);
+    try {
+      await api.changeEmail({ currentPassword: emailCurrentPassword, newEmail: requestedEmail });
+      setEmailCurrentPassword('');
+      setNewEmail('');
+      setEmailConfirmation('');
+      setEmailMessage(
+        'Email change pending. Check ' + requestedEmail
+          + ' for a confirmation link, or check the server log when running locally without mail delivery.'
+          + ' Your current email stays active until you confirm it.',
+      );
+    } catch (err) {
+      setEmailError(errorMessage(err, 'Could not change email.'));
+    } finally {
+      setEmailBusy(false);
     }
   };
 
@@ -178,6 +223,49 @@ export function Settings({ user, logout }: { user: User; logout: () => void }) {
           {busy ? 'Changing…' : 'Change password'}
         </button>
       </form>
+
+      <section className="email-settings" aria-labelledby="email-settings-heading">
+        <h3 id="email-settings-heading">Account email</h3>
+        <p>
+          Current email: <strong>{user.email}</strong>
+          {' '}
+          <span className="muted">{user.emailVerifiedAt ? '(verified)' : '(not verified)'}</span>
+        </p>
+        <form className="email-change-form" onSubmit={submitEmail}>
+          <label htmlFor="email-current-password">Current password</label>
+          <input
+            id="email-current-password"
+            name="currentPassword"
+            type="password"
+            value={emailCurrentPassword}
+            onChange={(event) => setEmailCurrentPassword(event.target.value)}
+            autoComplete="current-password"
+          />
+          <label htmlFor="new-email">New email</label>
+          <input
+            id="new-email"
+            name="newEmail"
+            type="email"
+            value={newEmail}
+            onChange={(event) => setNewEmail(event.target.value)}
+            autoComplete="email"
+          />
+          <label htmlFor="confirm-email">Confirm new email</label>
+          <input
+            id="confirm-email"
+            name="confirmEmail"
+            type="email"
+            value={emailConfirmation}
+            onChange={(event) => setEmailConfirmation(event.target.value)}
+            autoComplete="email"
+          />
+          {emailMessage && <p className="muted" role="status">{emailMessage}</p>}
+          {emailError && <p className="error" role="alert">{emailError}</p>}
+          <button type="submit" disabled={emailBusy}>
+            {emailBusy ? 'Sending…' : 'Change email'}
+          </button>
+        </form>
+      </section>
 
       <section className="api-keys" aria-labelledby="api-keys-heading">
         <h3 id="api-keys-heading">API keys</h3>
