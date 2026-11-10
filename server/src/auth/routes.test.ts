@@ -1,4 +1,13 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+const resendSend = vi.hoisted(() => vi.fn());
+
+vi.mock('resend', () => ({
+  Resend: vi.fn(function MockResend() {
+    return { emails: { send: resendSend } };
+  }),
+}));
+
 import request from 'supertest';
 import { prisma } from '../db.js';
 import { createApp } from '../index.js';
@@ -6,12 +15,22 @@ import { hashVerificationToken } from './verification.js';
 
 const app = createApp();
 
+afterEach(() => {
+  resendSend.mockReset();
+  vi.restoreAllMocks();
+});
+
 async function registerAndGetToken(agent: ReturnType<typeof request.agent>, data: Record<string, string>) {
   const previousApiKey = process.env.RESEND_API_KEY;
+  const previousNodeEnv = process.env.NODE_ENV;
   delete process.env.RESEND_API_KEY;
+  process.env.NODE_ENV = 'test';
   const log = vi.spyOn(console, 'info').mockImplementation(() => {});
   try {
     const registration = await agent.post('/api/auth/register').send(data);
+    if (registration.body.emailDelivery !== 'logged') {
+      throw new Error('registration did not report logged delivery');
+    }
     const activationLog = log.mock.calls
       .map(([message]) => String(message))
       .find((message) => message.includes('/activate?token='));
@@ -24,6 +43,8 @@ async function registerAndGetToken(agent: ReturnType<typeof request.agent>, data
     log.mockRestore();
     if (previousApiKey === undefined) delete process.env.RESEND_API_KEY;
     else process.env.RESEND_API_KEY = previousApiKey;
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousNodeEnv;
   }
 }
 
@@ -77,6 +98,96 @@ describe('POST /api/auth/register', () => {
       password: 'correct-horse',
     });
     expect(missingEmail.status).toBe(400);
+  });
+
+  it('fails closed for missing or blank production mail keys while keeping the token', async () => {
+    const previousApiKey = process.env.RESEND_API_KEY;
+    const previousNodeEnv = process.env.NODE_ENV;
+    const log = vi.spyOn(console, 'info').mockImplementation(() => {});
+    process.env.NODE_ENV = 'production';
+
+    try {
+      for (const [suffix, apiKey] of [['missing', undefined], ['blank', '   ']] as const) {
+        if (apiKey === undefined) delete process.env.RESEND_API_KEY;
+        else process.env.RESEND_API_KEY = apiKey;
+        const email = `production-${suffix}@example.com`;
+        const response = await request(app).post('/api/auth/register').send({
+          handle: `production-${suffix}`,
+          email,
+          password: 'correct-horse',
+        });
+
+        expect(response.status).toBe(503);
+        expect(response.body).toEqual({ error: 'activation email unavailable' });
+        expect(response.text).not.toContain('/activate?token=');
+        const user = await prisma.user.findUniqueOrThrow({
+          where: { email },
+          select: { id: true },
+        });
+        expect(await prisma.emailVerification.count({ where: { userId: user.id } })).toBe(1);
+      }
+      expect(log).not.toHaveBeenCalled();
+    } finally {
+      if (previousApiKey === undefined) delete process.env.RESEND_API_KEY;
+      else process.env.RESEND_API_KEY = previousApiKey;
+      if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousNodeEnv;
+    }
+  });
+
+  it('returns sent delivery for an accepted Resend request', async () => {
+    const previousApiKey = process.env.RESEND_API_KEY;
+    const previousNodeEnv = process.env.NODE_ENV;
+    process.env.RESEND_API_KEY = 'resend-test-key';
+    process.env.NODE_ENV = 'test';
+    resendSend.mockResolvedValueOnce({ data: { id: 'email-id' }, error: null });
+
+    try {
+      const response = await request(app).post('/api/auth/register').send({
+        handle: 'provider-success-user',
+        email: 'provider-success-user@example.com',
+        password: 'correct-horse',
+      });
+
+      expect(response.status).toBe(201);
+      expect(response.body.emailDelivery).toBe('sent');
+      expect(response.body).not.toHaveProperty('token');
+    } finally {
+      if (previousApiKey === undefined) delete process.env.RESEND_API_KEY;
+      else process.env.RESEND_API_KEY = previousApiKey;
+      if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousNodeEnv;
+    }
+  });
+
+  it('returns the safe 503 response when the provider rejects registration mail', async () => {
+    const previousApiKey = process.env.RESEND_API_KEY;
+    const previousNodeEnv = process.env.NODE_ENV;
+    process.env.RESEND_API_KEY = 'resend-test-key';
+    process.env.NODE_ENV = 'test';
+    resendSend.mockRejectedValueOnce(new Error('provider request failed'));
+
+    try {
+      const response = await request(app).post('/api/auth/register').send({
+        handle: 'provider-failure-user',
+        email: 'provider-failure-user@example.com',
+        password: 'correct-horse',
+      });
+
+      expect(response.status).toBe(503);
+      expect(response.body).toEqual({ error: 'activation email unavailable' });
+      expect(response.text).not.toContain('/activate?token=');
+      const user = await prisma.user.findUniqueOrThrow({
+        where: { email: 'provider-failure-user@example.com' },
+        select: { id: true },
+      });
+      expect(await prisma.emailVerification.count({ where: { userId: user.id } })).toBe(1);
+    } finally {
+      if (previousApiKey === undefined) delete process.env.RESEND_API_KEY;
+      else process.env.RESEND_API_KEY = previousApiKey;
+      if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousNodeEnv;
+    }
   });
 });
 
@@ -245,6 +356,7 @@ describe('email activation', () => {
       expect(resend.body).toMatchObject({
         handle: 'activation-user',
         emailVerifiedAt: activation.body.emailVerifiedAt,
+        emailDelivery: 'not-needed',
       });
       expect(log).not.toHaveBeenCalled();
     } finally {
@@ -288,6 +400,7 @@ describe('email activation', () => {
     try {
       const resend = await agent.post('/api/auth/resend-activation');
       expect(resend.status).toBe(200);
+      expect(resend.body.emailDelivery).toBe('logged');
       const throttled = await agent.post('/api/auth/resend-activation');
       expect(throttled.status).toBe(429);
       expect(throttled.body).toMatchObject({
@@ -311,6 +424,51 @@ describe('email activation', () => {
       log.mockRestore();
       if (previousApiKey === undefined) delete process.env.RESEND_API_KEY;
       else process.env.RESEND_API_KEY = previousApiKey;
+    }
+  });
+
+  it('returns 503 for unavailable resend mail, keeps the token, and allows an immediate retry', async () => {
+    const agent = request.agent(app);
+    const { registration } = await registerAndGetToken(agent, {
+      handle: 'resend-failure-user',
+      email: 'resend-failure-user@example.com',
+      password: 'correct-horse',
+    });
+    const previousApiKey = process.env.RESEND_API_KEY;
+    const previousNodeEnv = process.env.NODE_ENV;
+    delete process.env.RESEND_API_KEY;
+    process.env.NODE_ENV = 'production';
+
+    try {
+      const failed = await agent.post('/api/auth/resend-activation');
+      expect(failed.status).toBe(503);
+      expect(failed.body).toEqual({ error: 'activation email unavailable' });
+      expect(failed.text).not.toContain('/activate?token=');
+      expect(await prisma.emailVerification.count({ where: { userId: registration.body.id } }))
+        .toBe(1);
+
+      process.env.RESEND_API_KEY = 'resend-test-key';
+      process.env.NODE_ENV = 'test';
+      resendSend.mockRejectedValueOnce(new Error('provider request failed'));
+      const rejected = await agent.post('/api/auth/resend-activation');
+      expect(rejected.status).toBe(503);
+      expect(rejected.body).toEqual({ error: 'activation email unavailable' });
+      expect(rejected.text).not.toContain('/activate?token=');
+      expect(await prisma.emailVerification.count({ where: { userId: registration.body.id } }))
+        .toBe(1);
+
+      resendSend.mockResolvedValueOnce({ data: { id: 'retry-email-id' }, error: null });
+      const retried = await agent.post('/api/auth/resend-activation');
+      expect(retried.status).toBe(200);
+      expect(retried.body).not.toHaveProperty('token');
+      expect(retried.body.emailDelivery).toBe('sent');
+      expect(await prisma.emailVerification.count({ where: { userId: registration.body.id } }))
+        .toBe(1);
+    } finally {
+      if (previousApiKey === undefined) delete process.env.RESEND_API_KEY;
+      else process.env.RESEND_API_KEY = previousApiKey;
+      if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousNodeEnv;
     }
   });
 });

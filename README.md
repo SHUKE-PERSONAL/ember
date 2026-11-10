@@ -51,8 +51,10 @@ Production uses the repository-root `.env.production` loaded by
 to the database, session, and message-encryption settings, configure:
 
 - `RESEND_API_KEY` — optional locally; when absent, activation links are logged
-  by the server instead of sent.
+  by the server instead of sent. Production requires a valid key; a missing key
+  or provider failure returns HTTP 503 with an activation-mail availability error.
 - `MAIL_FROM` — sender address, defaulting to `noreply@mail.shukelabs.com`.
+  Production must use a valid address verified with the mail provider.
 - `APP_URL` — client origin used in activation links, defaulting to
   `http://localhost:5173` locally and `https://bbs.shukelabs.com` in production.
 - `POST_COOLDOWN_SECONDS` — live per-request cooldown after activation; defaults
@@ -138,11 +140,11 @@ curl --fail --silent https://bbs.shukelabs.com/api/health
 ## Endpoints
 
 - `GET /api/health` → `{ "status": "ok" }`
-- `POST /api/auth/register` → create and auto-login an account, then send an activation email
+- `POST /api/auth/register` → create and auto-login an account, then send an activation email; successful responses include `emailDelivery: "sent"` or `"logged"`
 - `POST /api/auth/login` → authenticate by email or handle
 - `POST /api/auth/change-password` → change the authenticated user's password with `{ "currentPassword": "...", "newPassword": "..." }`; returns `204 No Content`
 - `POST /api/auth/activate` → activate an account with `{ "token": "..." }`
-- `POST /api/auth/resend-activation` → resend the authenticated user's activation email
+- `POST /api/auth/resend-activation` → resend the authenticated user's activation email; successful delivery responses include `emailDelivery: "sent"` or `"logged"` (`"not-needed"` when already verified)
 - `GET /api/me` → the authenticated user's account, including `emailVerifiedAt`
 - `POST /api/apikeys` → create an API key for the authenticated user; send `{ "name": "HappyNotes sync", "scopes": "posts:write", "expiresAt": "2026-12-31" }` and copy the plaintext `key` from the one-time response
 - `GET /api/apikeys` / `DELETE /api/apikeys/:id` → list safe metadata (`id`, `name`, `scopes`, expiry, last-used, and creation times) or revoke one; list responses never contain the plaintext key or its hash

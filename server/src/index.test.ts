@@ -36,14 +36,26 @@ describe('production SPA serving', () => {
 
   it('keeps API routes ahead of the SPA fallback', async () => {
     const health = await request(app).get('/api/health');
-    const register = await request(app)
-      .post('/api/auth/register')
-      .set('X-Forwarded-Proto', 'https')
-      .send({
-        handle: 'production-api-test',
-        email: 'production-api-test@example.com',
-        password: 'correct-horse',
-      });
+    const previousMailApiKey = process.env.RESEND_API_KEY;
+    const previousMailNodeEnv = process.env.NODE_ENV;
+    delete process.env.RESEND_API_KEY;
+    process.env.NODE_ENV = 'test';
+    let register;
+    try {
+      register = await request(app)
+        .post('/api/auth/register')
+        .set('X-Forwarded-Proto', 'https')
+        .send({
+          handle: 'production-api-test',
+          email: 'production-api-test@example.com',
+          password: 'correct-horse',
+        });
+    } finally {
+      if (previousMailApiKey === undefined) delete process.env.RESEND_API_KEY;
+      else process.env.RESEND_API_KEY = previousMailApiKey;
+      if (previousMailNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousMailNodeEnv;
+    }
     expect(register.status).toBe(201);
     const sessionCookie = register.headers['set-cookie']?.[0]?.split(';', 1)[0];
     expect(sessionCookie).toBeDefined();

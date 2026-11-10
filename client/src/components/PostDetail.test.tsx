@@ -49,6 +49,7 @@ describe('PostDetail posting notices', () => {
     const resend = vi.spyOn(api, 'resendActivation').mockResolvedValue({
       ...verifiedUser,
       emailVerifiedAt: null,
+      emailDelivery: 'sent',
     });
     const container = document.createElement('div');
 
@@ -69,6 +70,60 @@ describe('PostDetail posting notices', () => {
     });
     expect(resend).toHaveBeenCalledOnce();
     expect(container.textContent).toContain('Activation email sent.');
+  });
+
+  it('identifies a development-only logged activation link', async () => {
+    vi.spyOn(api, 'postDetail').mockResolvedValue({ post, replies: [] });
+    vi.spyOn(api, 'resendActivation').mockResolvedValue({
+      ...verifiedUser,
+      emailVerifiedAt: null,
+      emailDelivery: 'logged',
+    });
+    const container = document.createElement('div');
+
+    await act(async () => {
+      root = createRoot(container);
+      root.render(
+        <AuthProvider user={{ ...verifiedUser, emailVerifiedAt: null }} showAuth={vi.fn()}>
+          <PostDetail id="post-id" user={{ ...verifiedUser, emailVerifiedAt: null }} logout={vi.fn()} />
+        </AuthProvider>,
+      );
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.reply-compose button')?.click();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('Activation link logged for development; check the server logs.');
+    expect(container.textContent).not.toContain('Activation email sent.');
+  });
+
+  it('shows resend delivery failure without a success message', async () => {
+    vi.spyOn(api, 'postDetail').mockResolvedValue({ post, replies: [] });
+    vi.spyOn(api, 'resendActivation').mockRejectedValue(
+      new ApiError(503, 'activation email unavailable', { error: 'activation email unavailable' }),
+    );
+    const container = document.createElement('div');
+
+    await act(async () => {
+      root = createRoot(container);
+      root.render(
+        <AuthProvider user={{ ...verifiedUser, emailVerifiedAt: null }} showAuth={vi.fn()}>
+          <PostDetail id="post-id" user={{ ...verifiedUser, emailVerifiedAt: null }} logout={vi.fn()} />
+        </AuthProvider>,
+      );
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.reply-compose button')?.click();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('activation email unavailable');
+    expect(container.textContent).not.toContain('Activation email sent.');
   });
 
   it('shows the server-provided cooldown for replies', async () => {

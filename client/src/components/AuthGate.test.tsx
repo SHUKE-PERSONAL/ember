@@ -3,7 +3,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { api } from '../api';
+import { api, type ActivationEmailResponse } from '../api';
 import { AuthForm, AuthGate } from './AuthGate';
 
 const user = {
@@ -60,7 +60,10 @@ describe('AuthForm', () => {
   });
 
   it('keeps registration handle and email inputs separate', async () => {
-    const register = vi.spyOn(api, 'register').mockResolvedValue(user);
+    const register = vi.spyOn(api, 'register').mockResolvedValue({
+      ...user,
+      emailDelivery: 'sent',
+    });
     const onAuthed = vi.fn();
     const container = document.createElement('div');
     document.body.append(container);
@@ -116,7 +119,11 @@ describe('AuthForm', () => {
 
   it('holds a newly registered unverified session on the check-email screen', async () => {
     vi.spyOn(api, 'me').mockRejectedValue(new Error('not authenticated'));
-    const registered = { ...user, emailVerifiedAt: null };
+    const registered: ActivationEmailResponse = {
+      ...user,
+      emailVerifiedAt: null,
+      emailDelivery: 'logged',
+    };
     const register = vi.spyOn(api, 'register').mockResolvedValue(registered);
     const resend = vi.spyOn(api, 'resendActivation').mockResolvedValue(registered);
     const container = document.createElement('div');
@@ -151,6 +158,8 @@ describe('AuthForm', () => {
 
     expect(register).toHaveBeenCalledOnce();
     expect(container.textContent).toContain('Check your email');
+    expect(container.textContent).toContain('Activation link logged for development; check the server logs.');
+    expect(container.textContent).not.toContain('We sent an activation link');
     expect(container.textContent).not.toContain('app');
     const button = Array.from(container.querySelectorAll('button'))
       .find((candidate) => candidate.textContent === 'Resend activation email');
@@ -159,7 +168,7 @@ describe('AuthForm', () => {
       await Promise.resolve();
     });
     expect(resend).toHaveBeenCalledOnce();
-    expect(container.textContent).toContain('Activation email sent.');
+    expect(container.textContent).toContain('Activation link logged for development; check the server logs.');
     container.remove();
   });
 
