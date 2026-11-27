@@ -56,8 +56,9 @@ to the database, session, and message-encryption settings, configure:
   or provider failure returns HTTP 503 with an activation-mail availability error.
 - `MAIL_FROM` — sender address, defaulting to `noreply@mail.shukelabs.com`.
   Production must use a valid address verified with the mail provider.
-- `APP_URL` — client origin used in activation links, defaulting to
-  `http://localhost:5173` locally and `https://bbs.shukelabs.com` in production.
+- `APP_URL` — client origin used in activation and email-change links, defaulting
+  to `http://localhost:5173` locally and `https://ember.shukelabs.com` in
+  production.
 - `POST_COOLDOWN_SECONDS` — live per-request cooldown after activation; defaults
   to `0`, and invalid values safely fall back to `0`.
 
@@ -79,8 +80,9 @@ cookies, serve the application over HTTPS.
 The production deployment runs the app and PostgreSQL in Docker Compose on
 `arm/sydney2` (`152.69.173.242`). The app binds to `127.0.0.1:3001`; nginx
 terminates TLS with a Certbot certificate and proxies the hostname to that
-private port, while Cloudflare proxies the public HTTPS connection in Full
-SSL mode.
+private port, while Cloudflare proxies the canonical public HTTPS connection in
+Full SSL mode. The canonical URL is `https://ember.shukelabs.com`; the former
+`bbs.shukelabs.com` hostname remains a compatibility redirect.
 
 One-time host setup:
 
@@ -94,31 +96,36 @@ One-time host setup:
    `DATABASE_URL`. Keep
    `DATABASE_URL` pointed at the Compose service name `postgres`; this file is
    host-only, should be mode `600`, and is preserved by deployments.
-3. After the proxied DNS A record for `bbs.shukelabs.com` resolves, bootstrap
-   the nginx certificate. Sydney2 keeps host configs in `/etc/nginx/conf.d`.
-   Install a temporary port-80 server block for the hostname, then request the
-   certificate:
+3. After the proxied DNS A record for `ember.shukelabs.com` resolves (the
+   Cloudflare DNS change is the `shukebeta/devops` slice), bootstrap the Ember
+   nginx certificate. The existing `bbs.shukelabs.com` record and certificate
+   remain for compatibility redirects. Sydney2 keeps host configs in
+   `/etc/nginx/conf.d`. Install a temporary port-80 server block for Ember,
+   then request the certificate:
 
    ```bash
-   sudo tee /etc/nginx/conf.d/bbs.shukelabs.com.conf >/dev/null <<'NGINX'
+   sudo tee /etc/nginx/conf.d/ember.shukelabs.com.conf >/dev/null <<'NGINX'
    server {
        listen 80;
        listen [::]:80;
-       server_name bbs.shukelabs.com;
+       server_name ember.shukelabs.com;
        location / { return 404; }
    }
    NGINX
    sudo nginx -t && sudo systemctl reload nginx
-   sudo certbot certonly --nginx -d bbs.shukelabs.com
+   sudo certbot certonly --nginx -d ember.shukelabs.com
+   sudo cp /var/www/ember/deploy/nginx/ember.shukelabs.com.conf \
+     /etc/nginx/conf.d/ember.shukelabs.com.conf
    sudo cp /var/www/ember/deploy/nginx/bbs.shukelabs.com.conf \
      /etc/nginx/conf.d/bbs.shukelabs.com.conf
    sudo nginx -t && sudo systemctl reload nginx
    ```
-4. In the `shukelabs.com` Cloudflare zone, create an A record for `bbs` to
-   `152.69.173.242` with the proxy enabled. Keep the zone SSL mode at Full;
-   nginx terminates TLS with the Certbot certificate, and the template
-   preserves Cloudflare's `X-Forwarded-Proto: https` header so the session
-   cookie remains secure.
+4. Keep proxied A records for both `ember` and the existing `bbs` hostname in
+   the `shukelabs.com` Cloudflare zone, with the canonical record targeting
+   `152.69.173.242`. Keep the zone SSL mode at Full; nginx terminates TLS with
+   the matching Certbot certificates, and the canonical template preserves
+   Cloudflare's `X-Forwarded-Proto: https` header so the session cookie remains
+   secure.
 5. Add these GitHub Actions repository secrets: `SSH_HOST`, `SSH_USER`, and
    `SSH_PRIVATE_KEY`. The deploy workflow uses them to ship the checked-out
    commit, build on the native ARM host, migrate, restart, and health-check.
@@ -126,13 +133,25 @@ One-time host setup:
 Pushes to `main` and manual runs of `.github/workflows/deploy.yml` deploy the
 checked-out repository commit. To roll back, manually run the same workflow
 with a known-good commit or rerun that commit's workflow; the PostgreSQL named
-volume is not removed by a deploy.
+volume is not removed by a deploy. Each deployment idempotently sets only
+`APP_URL` in `/var/www/ember/.env.production` to the canonical origin and
+preserves the other production secrets.
 
 Verify the public edge after the first deployment:
 
 ```bash
-curl --fail --silent https://bbs.shukelabs.com/api/health
-# Open https://bbs.shukelabs.com and browse publicly. Register and activate the
+set -euo pipefail
+curl --fail --silent https://ember.shukelabs.com/api/health
+expected='308 https://ember.shukelabs.com/path?q=1'
+for url in \
+  'http://bbs.shukelabs.com/path?q=1' \
+  'https://bbs.shukelabs.com/path?q=1'
+do
+  observed="$(curl --silent --show-error --output /dev/null --max-redirs 0 \
+    --write-out '%{http_code} %{redirect_url}' "$url")"
+  test "$observed" = "$expected"
+done
+# Open https://ember.shukelabs.com and browse publicly. Register and activate the
 # email link before composing a post, then confirm it is visible on the
 # timeline. Restart the app on sydney2 and confirm the same post is still
 # visible after the check.
