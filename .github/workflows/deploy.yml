@@ -53,6 +53,15 @@ jobs:
           deploy() {
             local deploy_path="$1"
             cd "$deploy_path"
+            if [ ! -f .env.production ]; then
+              echo "missing $deploy_path/.env.production" >&2
+              exit 1
+            fi
+            if grep -q '^APP_URL=' .env.production; then
+              sed -i 's|^APP_URL=.*$|APP_URL=https://ember.shukelabs.com|' .env.production
+            else
+              printf '%s\n' 'APP_URL=https://ember.shukelabs.com' >> .env.production
+            fi
             local compose=(docker compose --env-file .env.production -f docker-compose.production.yml)
 
             "${compose[@]}" build --pull ember
@@ -69,4 +78,23 @@ jobs:
         run: |
           set -euo pipefail
           curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-all-errors \
-            https://bbs.shukelabs.com/api/health | grep -Fq '{"status":"ok"}'
+            https://ember.shukelabs.com/api/health | grep -Fq '{"status":"ok"}'
+
+      - name: Verify the legacy host redirects
+        run: |
+          set -euo pipefail
+          expected='308 https://ember.shukelabs.com/path?q=1'
+          for url in \
+            'http://bbs.shukelabs.com/path?q=1' \
+            'https://bbs.shukelabs.com/path?q=1'
+          do
+            if ! observed="$(curl --silent --show-error --output /dev/null \
+              --max-redirs 0 --write-out '%{http_code} %{redirect_url}' "$url")"; then
+              echo "legacy redirect check failed for $url: curl could not complete" >&2
+              exit 1
+            fi
+            if [ "$observed" != "$expected" ]; then
+              echo "legacy redirect check failed for $url: observed '$observed'; expected '$expected'" >&2
+              exit 1
+            fi
+          done
