@@ -32,7 +32,7 @@ function parseExpiresAt(value: unknown) {
 apiKeysRouter.post('/apikeys', asyncHandler(async (req: Request, res: Response) => {
   const { name, scopes = '', expiresAt: expiresAtValue } = req.body ?? {};
   if (!isNonEmptyString(name) || (typeof scopes !== 'string' && scopes !== undefined)) {
-    return res.status(400).json({ error: 'name and scopes are required' });
+    return res.status(400).json({ error: 'name is required; scopes must be a string' });
   }
 
   const expiresAt = parseExpiresAt(expiresAtValue);

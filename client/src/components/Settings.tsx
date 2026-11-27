@@ -28,7 +28,6 @@ export function Settings({ user, logout }: { user: User; logout: () => void }) {
   const [apiKeysLoading, setApiKeysLoading] = useState(true);
   const [apiKeysLoadError, setApiKeysLoadError] = useState<string | null>(null);
   const [apiKeyName, setApiKeyName] = useState('');
-  const [apiKeyScopes, setApiKeyScopes] = useState('');
   const [apiKeyExpiresAt, setApiKeyExpiresAt] = useState('');
   const [apiKeyBusy, setApiKeyBusy] = useState(false);
   const [revokingApiKeyId, setRevokingApiKeyId] = useState<string | null>(null);
@@ -136,8 +135,6 @@ export function Settings({ user, logout }: { user: User; logout: () => void }) {
     }
 
     const body: CreateApiKeyInput = { name };
-    const scopes = apiKeyScopes.trim();
-    if (scopes) body.scopes = scopes;
     if (apiKeyExpiresAt) body.expiresAt = apiKeyExpiresAt;
 
     setApiKeyBusy(true);
@@ -147,7 +144,6 @@ export function Settings({ user, logout }: { user: User; logout: () => void }) {
       setApiKeys((current) => [metadata, ...current]);
       setOneTimeApiKey(key);
       setApiKeyName('');
-      setApiKeyScopes('');
       setApiKeyExpiresAt('');
       setApiKeyMessage('API key created. Copy the secret now; it will not be shown again.');
     } catch (err) {
@@ -302,15 +298,6 @@ export function Settings({ user, logout }: { user: User; logout: () => void }) {
             autoComplete="off"
             placeholder="HappyNotes sync"
           />
-          <label htmlFor="api-key-scopes">Scopes (optional)</label>
-          <input
-            id="api-key-scopes"
-            type="text"
-            value={apiKeyScopes}
-            onChange={(event) => setApiKeyScopes(event.target.value)}
-            autoComplete="off"
-            placeholder="posts:write,posts:read"
-          />
           <label htmlFor="api-key-expires-at">Expires at (optional)</label>
           <input
             id="api-key-expires-at"
@@ -337,7 +324,6 @@ export function Settings({ user, logout }: { user: User; logout: () => void }) {
               <li className="api-key-row" key={apiKey.id}>
                 <div className="api-key-details">
                   <strong>{apiKey.name}</strong>
-                  <span>Scopes: {apiKey.scopes || 'None'}</span>
                   <span>Expires: {formatDate(apiKey.expiresAt)}</span>
                   <span>Last used: {formatDate(apiKey.lastUsedAt)}</span>
                   <span>Created: {formatDate(apiKey.createdAt)}</span>

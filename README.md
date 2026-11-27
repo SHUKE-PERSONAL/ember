@@ -149,8 +149,8 @@ curl --fail --silent https://bbs.shukelabs.com/api/health
 - `POST /api/auth/activate` → activate an account with `{ "token": "..." }`
 - `POST /api/auth/resend-activation` → resend the authenticated user's activation email; successful delivery responses include `emailDelivery: "sent"` or `"logged"` (`"not-needed"` when already verified)
 - `GET /api/me` → the authenticated user's account, including `emailVerifiedAt`
-- `POST /api/apikeys` → create an API key for the authenticated user; send `{ "name": "HappyNotes sync", "scopes": "posts:write", "expiresAt": "2026-12-31" }` and copy the plaintext `key` from the one-time response
-- `GET /api/apikeys` / `DELETE /api/apikeys/:id` → list safe metadata (`id`, `name`, `scopes`, expiry, last-used, and creation times) or revoke one; list responses never contain the plaintext key or its hash
+- `POST /api/apikeys` → create an API key for the authenticated user; send `{ "name": "HappyNotes sync", "expiresAt": "2026-12-31" }` and copy the plaintext `key` from the one-time response. API keys have no scopes and act as their owner's account.
+- `GET /api/apikeys` / `DELETE /api/apikeys/:id` → list safe metadata (`id`, `name`, expiry, last-used, and creation times) or revoke one; list responses never contain the plaintext key or its hash
 - `GET /api/users/:handle` → public profile, follower/following counts, and viewer follow state
 - `GET /api/users/:handle/posts` → cursor-paginated posts authored by that user
 - `POST /api/users/:handle/follow` / `DELETE /api/users/:handle/follow` → follow or unfollow a user
