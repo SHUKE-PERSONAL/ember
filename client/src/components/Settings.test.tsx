@@ -214,17 +214,14 @@ describe('Settings', () => {
 
     await act(async () => {
       setInputValue(container.querySelector('#api-key-name') as HTMLInputElement, 'Agent sync');
-      setInputValue(container.querySelector('#api-key-expires-at') as HTMLInputElement, '2027-01-01T12:00');
       container.querySelector('form.api-key-form')?.dispatchEvent(
         new Event('submit', { bubbles: true, cancelable: true }),
       );
       await Promise.resolve();
     });
 
-    expect(createApiKey).toHaveBeenCalledWith({
-      name: 'Agent sync',
-      expiresAt: '2027-01-01T12:00',
-    });
+    expect(createApiKey).toHaveBeenCalledTimes(1);
+    expect(createApiKey.mock.calls[0]?.[0]).toStrictEqual({ name: 'Agent sync' });
     expect(container.querySelector('#api-key-scopes')).toBeNull();
     expect((container.querySelector('.api-key-secret-value') as HTMLInputElement).value)
       .toBe('emb_one-time-secret');
