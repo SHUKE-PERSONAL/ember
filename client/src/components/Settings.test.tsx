@@ -160,7 +160,7 @@ describe('Settings', () => {
     container.remove();
   });
 
-  it('loads and renders only masked API-key metadata', async () => {
+  it('loads API-key metadata without rendering legacy scopes', async () => {
     const apiKeys = Promise.resolve({
       apiKeys: [{
         id: 'key-id',
@@ -179,7 +179,8 @@ describe('Settings', () => {
     });
 
     expect(container.textContent).toContain('HappyNotes sync');
-    expect(container.textContent).toContain('posts:write');
+    expect(container.textContent).not.toContain('Scopes');
+    expect(container.textContent).not.toContain('posts:write');
     expect(container.querySelector('.api-key-list')).not.toBeNull();
     container.remove();
   });
@@ -213,19 +214,15 @@ describe('Settings', () => {
 
     await act(async () => {
       setInputValue(container.querySelector('#api-key-name') as HTMLInputElement, 'Agent sync');
-      setInputValue(container.querySelector('#api-key-scopes') as HTMLInputElement, 'posts:write');
-      setInputValue(container.querySelector('#api-key-expires-at') as HTMLInputElement, '2027-01-01T12:00');
       container.querySelector('form.api-key-form')?.dispatchEvent(
         new Event('submit', { bubbles: true, cancelable: true }),
       );
       await Promise.resolve();
     });
 
-    expect(createApiKey).toHaveBeenCalledWith({
-      name: 'Agent sync',
-      scopes: 'posts:write',
-      expiresAt: '2027-01-01T12:00',
-    });
+    expect(createApiKey).toHaveBeenCalledTimes(1);
+    expect(createApiKey.mock.calls[0]?.[0]).toStrictEqual({ name: 'Agent sync' });
+    expect(container.querySelector('#api-key-scopes')).toBeNull();
     expect((container.querySelector('.api-key-secret-value') as HTMLInputElement).value)
       .toBe('emb_one-time-secret');
     expect(container.textContent).toContain('API key created. Copy the secret now; it will not be shown again.');
@@ -244,7 +241,7 @@ describe('Settings', () => {
       apiKeys: [{
         id: 'key-id',
         name: 'Agent sync',
-        scopes: '',
+        scopes: 'posts:write',
         expiresAt: null,
         lastUsedAt: null,
         createdAt: '2026-08-22T00:00:00.000Z',
@@ -276,7 +273,7 @@ describe('Settings', () => {
       apiKeys: [{
         id: 'key-id',
         name: 'Agent sync',
-        scopes: '',
+        scopes: 'posts:write',
         expiresAt: null,
         lastUsedAt: null,
         createdAt: '2026-08-22T00:00:00.000Z',

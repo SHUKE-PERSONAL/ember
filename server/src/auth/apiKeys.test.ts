@@ -67,6 +67,7 @@ describe('API key management', () => {
     await registerAndVerify(agent, 'api-key-expiry');
     const created = await agent.post('/api/apikeys').send({ name: 'expiring key' });
     expect(created.status).toBe(201);
+    expect(created.body.scopes).toBe('');
 
     const malformed = await request(app)
       .post('/api/posts')
@@ -89,5 +90,21 @@ describe('API key management', () => {
       .set('Authorization', `Bearer ${created.body.key}`)
       .send({ text: 'expired', source: 'test', externalId: 'expired' });
     expect(expired.status).toBe(401);
+  });
+
+  it('accepts optional scopes but rejects non-string values', async () => {
+    const agent = request.agent(app);
+    await registerAndVerify(agent, 'api-key-scope-validation');
+
+    const withoutScopes = await agent.post('/api/apikeys').send({ name: 'scope-less key' });
+    expect(withoutScopes.status).toBe(201);
+    expect(withoutScopes.body.scopes).toBe('');
+
+    const invalidScopes = await agent.post('/api/apikeys').send({
+      name: 'invalid scopes',
+      scopes: ['posts:write'],
+    });
+    expect(invalidScopes.status).toBe(400);
+    expect(invalidScopes.body.error).toBe('name is required; scopes must be a string');
   });
 });
